@@ -272,7 +272,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
    מינהל התכנון (iplan Xplan), OpenStreetMap Nominatim (איתור כתובת).
    נתוני nadlan.gov.il לא בשימוש עד אישור בכתב ממפ"י (תנאי השימוש שלהם).
    ===================================================================== */
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 /* ---------- יומן שגיאות (לקח StockAI) ---------- */
 const ERRLOG_KEY = 'makom_errlog';
@@ -452,7 +452,35 @@ function cityMatch(res, city) {
   const c = norm(city);
   return res.filter(a => placeCities(a).some(n => { const pc = norm(n); return pc && pc.length > 1 && (pc === c || pc.startsWith(c) || c.startsWith(pc)); }));
 }
+/* Esri World Geocoder — איתור ברמת בית (נבדק 8.10.2026: "הרצל 10, חיפה" נמצא כ-PointAddress,
+   כש-Nominatim החזיר נקודה באמצע הרחוב, 360 מ' מהבית).
+   תנאי שימוש: חיפוש בודד בלי מפתח מותר, אבל אסור לשמור את התוצאה → לא נכנס למטמון (src:'esri').
+   קבלים רק אם העיר תואמת ויש רחוב. Locality/POI → לא מספיק, ממשיכים ל-Nominatim. */
+const ESRI_GC = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates';
+const noNiqqud = s => String(s || '').replace(/[֑-ׇ]/g, '');
+async function esriGeocode(city, street, num) {
+  const p = new URLSearchParams({ f: 'json', singleLine: (street + (num ? ' ' + num : '')) + ', ' + city, sourceCountry: 'ISR', langCode: 'HE', maxLocations: '4', outFields: 'Addr_type,City,StName,AddNum' });
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 8000);
+  let o;
+  try { const r = await fetch(ESRI_GC + '?' + p.toString(), { signal: ctl.signal }); if (!r.ok) throw new Error('HTTP ' + r.status); o = await r.json(); }
+  finally { clearTimeout(to); }
+  const c = norm(noNiqqud(city)), s = norm(street);
+  const ok = (o.candidates || []).filter(x => {
+    const a = x.attributes || {}, pc = norm(noNiqqud(a.City));
+    return x.score >= 90 && pc && (pc === c || pc.startsWith(c) || c.startsWith(pc)) && (!s || norm(noNiqqud(a.StName)).includes(s) || s.includes(norm(noNiqqud(a.StName))));
+  });
+  const prec = { PointAddress: 'house', Subaddress: 'house', StreetAddress: 'interp', StreetAddressExt: 'street', StreetName: 'street', StreetInt: 'street' };
+  const best = ok.find(x => prec[x.attributes.Addr_type]);
+  if (!best) return null;
+  const pr = prec[best.attributes.Addr_type];
+  return { lat: +best.location.y, lon: +best.location.x, precision: num ? pr : 'street', src: 'esri' };
+}
 async function geocode(city, street, num) {
+  // 0) Esri — הכי מדויק לכתובות בישראל. כשל → ממשיכים בשקט.
+  if (street) {
+    try { const e = await esriGeocode(city, street, num); if (e && (e.precision === 'house' || e.precision === 'interp' || !num)) return e; }
+    catch (err) { logErr('esri: ' + err.message); }
+  }
   // 1) כתובת מלאה, מובנית
   if (street) {
     const r1 = cityMatch(await nom({ street: (num ? num + ' ' : '') + street, city }), city);
@@ -633,33 +661,58 @@ async function getLandUse(lat, lon) {
   const d = 0.002;
   const q = new URLSearchParams({ f: 'json', geometry: lon + ',' + lat, geometryType: 'esriGeometryPoint', sr: '4326', tolerance: '1', mapExtent: [lon - d, lat - d, lon + d, lat + d].join(','), imageDisplay: '800,600,96', layers: 'all', returnGeometry: 'false' });
   const j = await cachedJSON(IPLAN + '?' + q.toString(), 3 * DAY);
-  const uses = new Map();
+  /* שכבה 4 "יעודי קרקע". אומת 8.10.2026 (הרצל 10 חיפה): שדות "שם ייעוד קרקע", "קוד מבא"ת", "שטח רשום דונם", "שם תכנית".
+     קוד 995 = "יעוד עפ"י תכנית מאושרת אחרת" — תכנית כלל-עירונית שלא קובעת ייעוד. לא מידע על המגרש → מסננים.
+     קוד 996 = "מגבלות בניה ופיתוח" (למשל גובה ליד שדה תעופה) → נשמר בנפרד כמגבלה.
+     ייעוד אמיתי מגיע רק מתכנית מקומית מקוונת; בשכונות ותיקות הייעוד בתכנית ישנה שאינה במאגר. */
+  const uses = new Map(), limits = new Map();
   for (const r of (j.results || [])) {
+    if (r.layerId !== 4 && !/יעוד|ייעוד/.test(r.layerName || '')) continue;
     const a = r.attributes || {};
-    const k = Object.keys(a).find(k => /י?יעוד/.test(k) && !/קוד|מזהה|id/i.test(k));
-    const v = k && String(a[k] || '').trim();
-    if (!v || v === 'Null' || /^\d+$/.test(v)) continue;
-    const pk = Object.keys(a).find(k => /מספר תכנית|שם תכנית/.test(k));
-    if (!uses.has(v)) uses.set(v, { use: v, layer: r.layerName || '', plan: pk ? String(a[pk] || '') : '' });
+    const v = String(a['שם ייעוד קרקע'] || '').trim(), code = String(a['קוד מבא"ת'] || '').trim();
+    const dunam = Number(a['שטח רשום דונם']) || 0, plan = String(a['שם תכנית'] || '').trim(), num = String(a['מספר תכנית'] || '').trim();
+    if (!v || v === 'Null' || code === '995' || /עפ"י תכנית מאושרת אחרת/.test(v)) continue;
+    if (code === '996' || /^מגבלות/.test(v)) { if (!limits.has(plan)) limits.set(plan, { use: v, plan, num }); continue; }
+    if (/אינה חלה/.test(v) || /סעיף 77|77-78|77 ו-? ?78|מדיניות/.test(plan)) continue; // הודעות ומסמכי מדיניות — לא ייעוד
+    if (dunam > 5000) continue; // ייעוד "כלל-עירוני" — לא של המגרש
+    // תכנית מתאר (ארצית/מחוזית/כוללנית) נותנת ייעוד כללי ("עירוני מעורב"). תכנית מפורטת נותנת את ייעוד המגרש ("מגורים ד'").
+    const master = /^תמ"?א|^תמ"?מ|תמא\/|מתאר ארצית|מתאר מחוזית|כוללני/.test(plan + ' ' + num) || /מוטה מטרו/.test(v);
+    const key = (master ? 'm:' : 'd:') + v;
+    if (!uses.has(key)) uses.set(key, { use: v, plan, num, dunam, master });
   }
-  return [...uses.values()];
+  const all = [...uses.values()];
+  return { uses: all.filter(u => !u.master), general: all.filter(u => u.master).sort((x, y) => /כוללני/.test(y.plan) - /כוללני/.test(x.plan)), limits: [...limits.values()] };
 }
-/* התחדשות עירונית: מתחמים מוכרזים (הרשות להתחדשות עירונית, data.gov.il).
-   מזהה המאגר ושמות השדות לא אומתו מהדפדפן — זיהוי שדות לפי שם, ובכשל: לא מציגים. */
-const RENEWAL_RID = '7c8255d0-49ef-49db-8904-4cf917586031';
-async function getRenewal(city, street) {
-  const r = await ck(RENEWAL_RID, { limit: 2000, q: city }, 7 * DAY);
-  const keys = (r.fields || []).map(f => f.id).filter(k => k !== '_id' && k !== 'rank');
-  const pick = re => keys.find(k => re.test(k));
-  const kCity = pick(/ישוב|יישוב|עיר|רשות/), kName = pick(/מתחם/) || pick(/שם/), kStatus = pick(/סטטוס|שלב|מצב/),
-    kUnits = pick(/יח.*ד|יחידות/), kAddr = pick(/כתובת|רחוב|גבול/), kTrack = pick(/מסלול|סוג/), kYear = pick(/תאריך|שנת|שנה/);
-  if (!kCity || !kName) throw new Error('מבנה מאגר ההתחדשות לא זוהה');
-  const c = norm(city);
-  const rows = r.records.filter(x => { const v = norm(x[kCity]); return v && (v === c || v.startsWith(c) || c.startsWith(v)); })
-    .map(x => ({ name: String(x[kName] || '').trim(), status: kStatus ? x[kStatus] : '', units: kUnits ? Number(x[kUnits]) || 0 : 0, addr: kAddr ? String(x[kAddr] || '') : '', track: kTrack ? x[kTrack] : '', year: kYear ? x[kYear] : '' }))
-    .filter(x => x.name);
-  const s = norm(street);
-  const onStreet = s && s.length > 1 ? rows.filter(x => norm(x.name + ' ' + x.addr).includes(s)) : [];
+/* התחדשות עירונית: "מתחמי התחדשות עירונית" (משרד הבינוי והשיכון, data.gov.il).
+   באג 1.1.0: המזהה הקודם (7c8255d0…) היה בכלל מאגר הגרלות מחיר למשתכן. המזהה והשדות כאן אומתו חי 8.10.2026
+   (970 מתחמים, 46 בחיפה). אין במאגר גיאומטריה — ההתאמה לפי שם המתחם, שהוא לרוב שם רחוב + טווח מספרים ("ברנר 2-18"). */
+const RENEWAL_RID = 'f65a0daf-f737-49c5-9424-d378d52104f5';
+const RENEWAL_DONE = /אחרי רישוי/;
+async function getRenewal(code, street, num) {
+  const r = await ck(RENEWAL_RID, { limit: 1000, filters: { SemelYeshuv: code } }, 7 * DAY);
+  const t = v => String(v ?? '').trim();
+  const rows = r.records.map(x => ({
+    name: t(x.ShemMitcham), status: t(x.Status), track: t(x.Maslul), declared: t(x.TaarichHachraza),
+    existing: Number(t(x.YachadKayam)) || 0, added: Number(t(x.YachadTosafti)) || 0, inExec: t(x.Bebitzua) === 'כן',
+    plan: t(x.MisparTochnit), link: t(x.KishurLatar), map: t(x.KishurLaMapa)
+  })).filter(x => x.name);
+  const s = norm(street), n = Number(num) || 0;
+  const onStreet = [];
+  if (s.length > 1) for (const x of rows) {
+    // כל מופע של שם הרחוב בשם המתחם, עם טווח מספרים אם יש ("רוטשילד 21-33", "שאול 24")
+    if (!norm(x.name).includes(s)) continue;
+    let inRange = null, gap = 9999;
+    const re = /(\d+)\s*(?:-\s*(\d+))?/g; let m;
+    const nm = x.name.replace(/מתחם\s*\d+/g, '').replace(/\S*\/\S*/g, ''); // "מתחם 16", "חפ/1086/יב" — לא מספרי בית
+    while (n && (m = re.exec(nm))) {
+      const a = +m[1], b = m[2] ? +m[2] : a, lo = Math.min(a, b), hi = Math.max(a, b);
+      if (a >= 1000) continue;
+      const g = n < lo ? lo - n : n > hi ? n - hi : 0;
+      gap = Math.min(gap, g); inRange = inRange || g === 0;
+    }
+    onStreet.push({ ...x, inRange, gap });
+  }
+  onStreet.sort((a, b) => a.gap - b.gap); // המתחם הקרוב למספר הבית ראשון (אילת 22-28 לפני אילת 72-74)
   return { rows, onStreet };
 }
 /* פנקס הקבלנים (רשם הקבלנים, data.gov.il) — לבדיקת קבלן. זיהוי שדות לפי שם. */
@@ -673,7 +726,15 @@ async function getContractor(name) {
     const pick = re => keys.find(k => re.test(k));
     const kName = pick(/SHEM_YESHUT|שם/), kAnaf = pick(/TEUR_ANAF|ענף/), kSivug = pick(/SIVUG|סיווג/), kCity = pick(/SHEM_YISHUV|ישוב/), kStreet = pick(/SHEM_REHOV|רחוב/), kKvutza = pick(/KVUTZA|קבוצה/);
     if (!kName) throw new Error('מבנה המאגר לא זוהה');
-    out.reg = r.records.filter(x => norm(x[kName]).includes(n)).map(x => ({ name: x[kName], anaf: kAnaf ? x[kAnaf] : '', sivug: [kKvutza && x[kKvutza], kSivug && x[kSivug]].filter(Boolean).join(' '), place: [kStreet && x[kStreet], kCity && x[kCity]].filter(Boolean).join(', ') }));
+    // כל ענף הוא שורה נפרדת בפנקס → מקבצים לחברה אחת עם רשימת ענפים וסיווגים
+    const by = new Map();
+    for (const x of r.records.filter(x => norm(x[kName]).includes(n))) {
+      const nm = String(x[kName] || '').trim(), id = String(x.MISPAR_KABLAN || x.MISPAR_YESHUT || nm).trim();
+      const g = by.get(id) || { name: nm, num: String(x.MISPAR_KABLAN || '').trim(), place: [kStreet && String(x[kStreet] || '').trim(), kCity && String(x[kCity] || '').trim()].filter(Boolean).join(', '), anafim: [] };
+      g.anafim.push([kAnaf ? String(x[kAnaf] || '').trim() : '', [kKvutza && x[kKvutza], kSivug && x[kSivug]].filter(Boolean).join('')].filter(Boolean).join(' · '));
+      by.set(id, g);
+    }
+    out.reg = [...by.values()];
   } catch (e) { out.regError = e.message; logErr('kablan: ' + e.message); }
   try {
     const r = await ck(RID.safety, { limit: 1000, q: name, fields: ['send_date', 'work_name', 'city_name', 'executor_name', 'category_name', 'felony_name'] }, DAY);
@@ -736,19 +797,35 @@ function analyze(R) {
   }
 
   // ---- ייעוד קרקע ----
-  if (has('landuse') && R.landuse.length) {
-    const u = R.landuse.map(x => x.use);
-    add({ cat: 'plan', sev: 'info', ic: 'plan', title: `ייעוד הקרקע בנקודה: ${u[0]}`, text: (u.length > 1 ? `ייעודים נוספים בנקודה: ${u.slice(1, 4).join(', ')}. ` : '') + 'הייעוד קובע מה מותר לבנות על המגרש. לפרטים מלאים: מסמכי התכנית.' });
+  if (has('landuse')) {
+    const { uses, limits } = R.landuse, general = R.landuse.general || [];
+    const gen = general.length ? ` בתכנית המתאר: ${general.slice(0, 2).map(g => `${g.use} (${g.plan})`).join(', ')}.` : '';
+    const limOnly = limits.length ? ` מגבלות בנקודה: ${limits.slice(0, 2).map(l => l.plan || l.use).join(', ')}.` : '', lim = limOnly + gen;
+    if (uses.length) add({ cat: 'plan', sev: 'info', ic: 'plan', title: `ייעוד הקרקע: ${uses[0].use}`,
+      text: `לפי ${uses[0].plan || 'תכנית מקומית'}${uses[0].num ? ` (${uses[0].num})` : ''}.` + (uses.length > 1 ? ` ייעודים נוספים בנקודה: ${uses.slice(1, 4).map(x => x.use).join(', ')}.` : '') + lim + ' הייעוד קובע מה מותר לבנות על המגרש. אם הנקודה על גבול בין מגרשים, בודקים בתשריט.' });
+    else add({ cat: 'plan', sev: 'info', ic: 'plan', title: general.length ? `ייעוד כללי לפי תכנית המתאר: ${general[0].use}` : 'הייעוד המפורט לא במאגר המקוון',
+      text: (general.length ? `זה ייעוד כללי לאזור, לא של המגרש עצמו. ` : '') + 'הייעוד המפורט של המגרש נקבע בתכנית ישנה יותר, שלא נכנסה למאגר הדיגיטלי של מינהל התכנון. את הייעוד המדויק בודקים בתיק המידע של הוועדה המקומית או בגיליון התב"ע בעירייה.' + (general.length > 1 ? ` ייעודים כלליים נוספים: ${general.slice(1, 3).map(g => g.use).join(', ')}.` : '') + limOnly });
   }
 
   // ---- התחדשות עירונית ----
   if (has('renewal')) {
     const { rows, onStreet } = R.renewal;
-    const one = x => `${x.name}${x.units ? ` · ${fmtN(x.units)} יח"ד` : ''}${x.status ? ` · ${x.status}` : ''}`;
-    if (onStreet.length) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: `מתחם התחדשות עירונית ברחוב ${R.addr.street}`,
-      text: onStreet.slice(0, 2).map(one).join(' | ') + '. התחדשות יכולה להעלות את ערך הדירות, אבל גם להביא שנים של עבודות. כדאי לברר באיזה שלב הפרויקט ואם הבניין עצמו כלול.' });
-    else if (rows.length) add({ cat: 'plan', sev: 'info', ic: 'plan', title: `${rows.length} מתחמי התחדשות עירונית מוכרזים ב${R.addr.city}`,
-      text: 'לא נמצא מתחם שהשם או הכתובת שלו כוללים את הרחוב שנבדק.', more: rows.slice(0, 8).map(one), moreTitle: 'המתחמים' });
+    const units = x => x.existing || x.added ? ` · ${fmtN(x.existing)} דירות קיימות${x.added ? `, +${fmtN(x.added)} חדשות` : ''}` : '';
+    const one = x => `${x.name}${units(x)}${x.status ? ` · ${x.status}` : ''}`;
+    const active = onStreet.filter(x => !RENEWAL_DONE.test(x.status));
+    const mine = active.filter(x => x.inRange), other = active.filter(x => !x.inRange);
+    const link = x => x.link ? { href: x.link, label: 'התכנית במבא"ת' } : x.map ? { href: x.map, label: 'המתחם במפה' } : null;
+    if (mine.length) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: `הבניין כנראה בתוך מתחם התחדשות עירונית`,
+      text: `${one(mine[0])}. מספר הבית נמצא בטווח שבשם המתחם. התחדשות יכולה להעלות את ערך הדירה, אבל גם להביא שנים של עבודות. מבררים באיזה שלב הפרויקט ומה כתוב על הבניין בתכנית.`,
+      more: mine.slice(1, 6).map(one), moreTitle: 'עוד', link: link(mine[0]) });
+    else if (other.length) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: `מתחם התחדשות עירונית ברחוב ${R.addr.street}`,
+      text: `${one(other[0])}. לא ברור מהמאגר אם הבניין עצמו כלול. בודקים בתכנית אילו כתובות בתוך המתחם.`,
+      more: other.slice(1, 6).map(one), moreTitle: 'עוד', link: link(other[0]) });
+    else if (onStreet.length) add({ cat: 'plan', sev: 'info', ic: 'plan', title: `מתחם התחדשות שכבר קיבל היתרים ברחוב ${R.addr.street}`,
+      text: onStreet.slice(0, 2).map(one).join(' | ') + '.', link: link(onStreet[0]) });
+    else if (rows.length) add({ cat: 'plan', sev: 'info', ic: 'plan', title: `${rows.length} מתחמי התחדשות עירונית ב${R.addr.city}, אף אחד לא ברחוב הזה`,
+      text: 'החיפוש לפי שם המתחם, שהוא בדרך כלל שם רחוב. מתחם שנקרא בשם אחר (למשל "מתחם 11") לא יזוהה. רשימה מלאה למטה.', more: rows.slice(0, 10).map(one), moreTitle: 'המתחמים' });
+    else add({ cat: 'plan', sev: 'info', ic: 'plan', title: `אין מתחמי התחדשות עירונית מוכרזים ב${R.addr.city}`, text: 'לפי מאגר מתחמי ההתחדשות של משרד הבינוי והשיכון.' });
   }
 
   // ---- אנטנות ----
@@ -837,6 +914,10 @@ function analyze(R) {
   if (R.geo.precision === 'city') {
     for (const f of F) if (f.markers && f.sev !== 'info') { f.sev = 'info'; f.text += ' המרחקים נמדדו ממרכז היישוב, כי הכתובת לא אותרה במפה.'; }
   }
+  // מיקום לפי הרחוב בלבד: הדגלים נשארים, אבל עם הסתייגות (נתפס 8.10.2026: הרצל 10 חיפה, 360 מ' מהבית)
+  if (R.geo.precision === 'street') {
+    for (const f of F) if (f.markers && f.sev !== 'info' && f.sev !== 'green') f.text += ' שימו לב: המרחק נמדד מנקודה על הרחוב, לא מהבית עצמו.';
+  }
   return F;
 }
 
@@ -872,7 +953,7 @@ const STEPS = [
   ['gas', 'תחנות דלק'], ['safety', 'צווי בטיחות באתרי בנייה']
 ];
 // מקורות "רכים": אם לא ענו, לא מציגים התראה (מבנה לא אומת / לא קריטי). נרשמים ביומן השגיאות.
-const SOFT = new Set(['landuse', 'renewal']);
+const SOFT = new Set(['landuse']); // התחדשות אומתה ב-1.2.0 — כשל שלה מוצג
 let CURRENT = null;
 
 /* איסוף: כל המקורות לכתובת אחת. משמש גם את הבדיקה, גם את ההשוואה. */
@@ -881,16 +962,17 @@ async function collect(addr, mark = () => {}) {
   let geo;
   if (addr.geo && isFinite(addr.geo.lat) && isFinite(addr.geo.lon)) geo = { lat: +addr.geo.lat, lon: +addr.geo.lon, precision: 'manual' };
   else {
-    const gc = store.get('geocache', {}), k = label(addr), hit = gc[k];
+    const gc = store.get('geocache2', {}), k = label(addr), hit = gc[k];
     if (hit && Date.now() - hit.t < 30 * DAY) geo = hit.g;
-    else { geo = await geocode(addr.city, addr.street, addr.num); gc[k] = { g: geo, t: Date.now() }; const ks = Object.keys(gc); if (ks.length > 60) delete gc[ks[0]]; store.set('geocache', gc); }
+    // תוצאה של Esri לא נשמרת (תנאי השימוש שלהם). של OSM — נשמרת 30 יום.
+    else { geo = await geocode(addr.city, addr.street, addr.num); if (geo.src !== 'esri') gc[k] = { g: geo, t: Date.now() }; const ks = Object.keys(gc); if (ks.length > 60) delete gc[ks[0]]; store.set('geocache2', gc); }
   }
   mark('geo', true);
   const p = toITM(geo.lat, geo.lon);
   const R = { addr, geo, p, at: new Date().toISOString() };
   const jobs = {
     plans: () => getPlans(geo.lat, geo.lon), plansNear: () => getPlansNear(geo.lat, geo.lon, p), landuse: () => getLandUse(geo.lat, geo.lon),
-    renewal: () => getRenewal(addr.city, addr.street),
+    renewal: () => getRenewal(addr.code, addr.street, addr.num),
     antennas: () => getAntennas(p), factories: () => getFactories(p),
     crime: () => getCrime(addr.code), schools: () => getSchools(p), bus: () => getBus(p, addr.code),
     air: () => getAir(p), gas: () => getGas(p), safety: () => getSafety(addr.city, addr.street)
@@ -1015,12 +1097,12 @@ function addRecent(a) { const r = store.get('recent', []).filter(x => label(x) !
 const VIEWS = [['report', 'דוח', 'list'], ['map', 'מפה', 'map'], ['summary', 'סיכום', 'text']];
 function renderResult() {
   const R = CURRENT, v = store.get('view', store.get('defaultView', 'report'));
-  const prec = { house: 'מיקום מדויק לפי מספר הבית', street: 'מיקום לפי הרחוב (מספר הבית לא אותר במפה)', city: 'מיקום לפי מרכז היישוב בלבד. המרחקים משוערים. אפשר לתקן במפה.', manual: 'מיקום שסימנת ידנית על המפה' }[R.geo.precision];
+  const prec = { house: 'מיקום מדויק לפי מספר הבית', interp: 'מיקום משוער לפי מספר הבית, בדיוק של עשרות מטרים', street: 'מספר הבית לא אותר. המרחקים נמדדו מנקודה כלשהי על הרחוב, ויכולים לטעות במאות מטרים. כדאי לסמן את הבית על המפה.', city: 'מיקום לפי מרכז היישוב בלבד. המרחקים משוערים. אפשר לתקן במפה.', manual: 'מיקום שסימנת ידנית על המפה' }[R.geo.precision];
   screen = 'result'; document.getElementById('btnBack').classList.remove('hidden');
   app.innerHTML = `<section class="screen">
   <div class="print-head">${esc(store.get('user', ''))} · ${new Date().toLocaleDateString('he-IL')} · מקום·AI</div>
   <div class="addr"><div class="sub">${esc(R.addr.city)}</div><h1 class="display">${esc(R.addr.street ? [R.addr.street, R.addr.num].filter(Boolean).join(' ') : R.addr.city)}</h1>
-  <div class="prec ${R.geo.precision === 'city' ? 'warn' : ''}">${prec}${R.geo.precision !== 'house' ? ` <button class="linkbtn no-print" id="bFixPin">${R.geo.precision === 'manual' ? 'לשנות' : 'לתקן מיקום'}</button>` : ''}</div></div>
+  <div class="prec ${R.geo.precision === 'city' || R.geo.precision === 'street' ? 'warn' : ''}">${prec}${R.geo.precision !== 'house' ? ` ${R.geo.precision === 'city' || R.geo.precision === 'street' ? `<button class="btn primary no-print" id="bFixPin" style="margin-top:8px;min-height:40px">${icon('pin', 18)} סמן את הבית על המפה</button>` : `<button class="linkbtn no-print" id="bFixPin">${R.geo.precision === 'manual' ? 'לשנות' : 'לתקן מיקום'}</button>`}` : ''}</div></div>
   ${scoreHtml(R)}
   ${diffHtml(R)}
   <div class="seg" role="group" aria-label="סוג תצוגה">${VIEWS.map(([k, t, ic]) => `<button aria-pressed="${k === v}" data-view="${k}">${icon(ic)}${t}</button>`).join('')}</div>
@@ -1303,8 +1385,10 @@ function renderKablan(pre) {
     if (screen !== 'kablan') return;
     const yearAgo = Date.now() - 3 * 365 * DAY, recent = r.orders.filter(x => x.t >= yearAgo);
     const reg = r.regError ? { sev: 'info', ic: 'alert', title: 'לא הצלחנו לקרוא את פנקס הקבלנים', text: 'המאגר לא ענה או שהמבנה שלו השתנה. אפשר לנסות שוב מאוחר יותר.' }
-      : r.reg.length ? { sev: 'green', ic: 'check', title: r.reg.length === 1 ? 'רשום בפנקס הקבלנים' : `${r.reg.length} רשומות בפנקס הקבלנים`, text: r.reg.slice(0, 1).map(x => [x.name, x.anaf, x.sivug && 'סיווג ' + x.sivug, x.place].filter(Boolean).join(' · ')).join(''), more: r.reg.slice(1, 8).map(x => [x.name, x.anaf, x.sivug].filter(Boolean).join(' · ')) }
-      : { sev: 'yellow', ic: 'alert', title: 'לא נמצא בפנקס הקבלנים', text: 'בודקים שהשם מוקלד בדיוק כמו בחוזה. קבלן שבונה בלי רישום — סיבה לעצור ולברר.' };
+      : r.reg.length ? { sev: 'green', ic: 'check', title: r.reg.length === 1 ? 'רשום בפנקס הקבלנים' : `${r.reg.length} חברות רשומות בשם דומה`,
+          text: [r.reg[0].name, r.reg[0].num && 'קבלן מס\' ' + r.reg[0].num, r.reg[0].place].filter(Boolean).join(' · ') + '. רשום ב: ' + r.reg[0].anafim.slice(0, 4).join(' | ') + (r.reg[0].anafim.length > 4 ? ` ועוד ${r.reg[0].anafim.length - 4}` : '') + '. הסיווג מגביל את היקף הפרויקט שמותר לקבלן לבצע באותו ענף. ג5 הוא הגבוה ביותר.',
+          more: r.reg.slice(1, 8).map(x => [x.name, x.num && 'מס\' ' + x.num, x.anafim.slice(0, 2).join(' | ')].filter(Boolean).join(' · ')), moreTitle: 'עוד חברות בשם דומה' }
+      : { sev: 'yellow', ic: 'alert', title: 'לא נמצא בפנקס הקבלנים', text: 'שתי סיבות נפוצות: (1) השם לא מוקלד בדיוק כמו בפנקס, אז מנסים מילה אחת מהשם. (2) זו חברה יזמית ולא קבלן. יזם (למשל חברה שמשווקת פרויקט) לא חייב להירשם, אבל הקבלן המבצע שלו חייב. בחוזה הרכישה מופיע מי הקבלן המבצע, ואותו בודקים כאן. קבלן שבונה בלי רישום הוא סיבה לעצור ולברר.' };
     const ord = r.ordersError ? { sev: 'info', ic: 'alert', title: 'מאגר צווי הבטיחות לא ענה', text: 'אפשר לנסות שוב מאוחר יותר.' }
       : recent.length ? { sev: recent.length >= 3 ? 'red' : 'yellow', ic: 'hardhat', title: recent.length === 1 ? 'צו בטיחות אחד ב-3 השנים האחרונות' : `${recent.length} צווי בטיחות ב-3 השנים האחרונות`, text: 'צווים שהוציא משרד העבודה לאתרים של הקבלן בגלל ליקויי בטיחות.', more: recent.slice(0, 8).map(x => `${x.send_date} · ${x.work_name || ''}, ${x.city_name || ''} · ${x.felony_name || ''}`) }
       : r.orders.length ? { sev: 'info', ic: 'hardhat', title: `${r.orders.length} צווי בטיחות, כולם לפני יותר מ-3 שנים`, text: `האחרון: ${r.orders[0].send_date}.` }
@@ -1317,7 +1401,7 @@ function renderKablan(pre) {
 
 /* ---------- מקורות ותאריכים ---------- */
 function sourcesBlock(R) {
-  return `<div class="foot">מקורות: מינהל התכנון (תכניות מקוונות מ-2011, ייעודי קרקע), הרשות להתחדשות עירונית, המשרד להגנת הסביבה (אנטנות, מפל"ס, ניטור אוויר), משטרת ישראל (תיקים לפי יישוב), משרד החינוך, משרד התחבורה, משרד האנרגיה, משרד העבודה (צווי בטיחות) — דרך data.gov.il. איתור כתובת: OpenStreetMap. נבדק ב-${new Date(R.at).toLocaleString('he-IL')}.<br>הנתונים מוצגים כפי שהם במקור ועשויים להיות חלקיים או לא מעודכנים. אינו ייעוץ משפטי, שמאי או הנדסי.</div>`;
+  return `<div class="foot">מקורות: מינהל התכנון (תכניות מקוונות מ-2011, ייעודי קרקע), משרד הבינוי והשיכון (מתחמי התחדשות עירונית), המשרד להגנת הסביבה (אנטנות, מפל"ס, ניטור אוויר), משטרת ישראל (תיקים לפי יישוב), משרד החינוך, משרד התחבורה, משרד האנרגיה, משרד העבודה (צווי בטיחות) — דרך data.gov.il. איתור כתובת: Esri ArcGIS (Powered by Esri), ו-OpenStreetMap כגיבוי. נבדק ב-${new Date(R.at).toLocaleString('he-IL')}.<br>הנתונים מוצגים כפי שהם במקור ועשויים להיות חלקיים או לא מעודכנים. אינו ייעוץ משפטי, שמאי או הנדסי.</div>`;
 }
 
 /* ---------- שמירה ושיתוף ---------- */
