@@ -241,7 +241,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
    מינהל התכנון (iplan Xplan), OpenStreetMap Nominatim (איתור כתובת).
    נתוני nadlan.gov.il לא בשימוש עד אישור בכתב ממפ"י (תנאי השימוש שלהם).
    ===================================================================== */
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 
 /* ---------- יומן שגיאות (לקח StockAI) ---------- */
 const ERRLOG_KEY = 'makom_errlog';
@@ -618,8 +618,9 @@ function analyze(R) {
   if (has('factories')) {
     const P = R.factories, in1 = P.filter(f => f.d <= 1000), in3 = P.filter(f => f.d <= 3000);
     const desc = f => `${f.name}${f.field ? ` (${f.field})` : ''}, ${fmtM(f.d)}`;
-    if (in1.length) add({ cat: 'env', sev: 'red', ic: 'factory', title: `${in1.length} מפעלים המדווחים על פליטות בטווח 1 ק"מ`, text: in1.slice(0, 3).map(desc).join(' · ') + '.', markers: 'factories' });
-    else if (in3.length) add({ cat: 'env', sev: 'yellow', ic: 'factory', title: `${in3.length} מפעלים מדווחים בטווח 3 ק"מ`, text: 'הקרוב: ' + desc(in3[0]) + '.', markers: 'factories' });
+    const nF = n => n === 1 ? 'מפעל אחד מדווח' : `${n} מפעלים מדווחים`;
+    if (in1.length) add({ cat: 'env', sev: 'red', ic: 'factory', title: `${nF(in1.length)} על פליטות בטווח 1 ק"מ`, text: in1.slice(0, 3).map(desc).join(' · ') + '.', markers: 'factories' });
+    else if (in3.length) add({ cat: 'env', sev: 'yellow', ic: 'factory', title: `${nF(in3.length)} בטווח 3 ק"מ`, text: 'הקרוב: ' + desc(in3[0]) + '.', markers: 'factories' });
     else add({ cat: 'env', sev: 'green', ic: 'factory', title: 'אין מפעלים מדווחים בטווח 3 ק"מ', text: P.length ? `הקרוב: ${desc(P[0])}.` : 'לא נמצא מפעל מדווח (מפל"ס) בטווח 5 ק"מ.' });
   }
 
@@ -679,6 +680,11 @@ function analyze(R) {
     add({ cat: 'move', sev: in400.length >= 3 ? 'green' : in400.length ? 'info' : 'yellow', ic: 'bus',
       title: in400.length ? `${in400.length} תחנות תחבורה ציבורית ב-400 מ'` : "אין תחנת תחבורה ציבורית ב-400 מ'",
       text: B.length ? `הקרובה במרחק ${fmtM(B[0].d)}.` : 'לא נמצאה תחנה ביישוב בטווח 800 מ\'.', markers: 'bus' });
+  }
+  // מיקום לפי מרכז היישוב בלבד: המרחקים לא מהבית → דגלי מרחק יורדים ל"מידע"
+  // (נתפס בבדיקה 8.10.2026: "תחנת דלק במרחק 70 מ'" נמדד ממרכז זכרון יעקב)
+  if (R.geo.precision === 'city') {
+    for (const f of F) if (f.markers && f.sev !== 'info') { f.sev = 'info'; f.text += ' המרחקים נמדדו ממרכז היישוב, כי הכתובת לא אותרה במפה.'; }
   }
   return F;
 }
