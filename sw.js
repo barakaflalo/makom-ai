@@ -6,7 +6,7 @@
    3. שומרים קובץ-קובץ (allSettled), לא addAll אטומי.
    4. בקשות לנתונים ממקורות אחרים (data.gov.il, iplan, OSM) לא נוגעים בהן כאן.
    5. מעלים VERSION בכל עדכון. */
-const VERSION = 'makom-1.0.2';
+const VERSION = 'makom-1.1.0';
 const SHELL = ['./', 'manifest.json', 'icon-192.png', 'icon-512.png', 'privacy_policy.html'];
 
 // --- תיקון קבוע: ניקוי תשובות "מופנות" (Cloudflare 308) ---

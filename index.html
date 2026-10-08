@@ -210,9 +210,40 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .dots span{width:8px;height:8px;border-radius:4px;background:var(--line)}
 .dots span.on{background:var(--accent);width:20px}
 
+/* ---------- 1.1: ציון, שינויים, סיכה, השוואה, קבלן ---------- */
+.score{width:100%;display:flex;align-items:center;gap:14px;margin-top:14px;padding:12px 14px;border-radius:var(--radius);border:1px solid var(--line);background:var(--bg-2);text-align:right;cursor:pointer}
+.score .sn{font-family:'Secular One',sans-serif;font-size:40px;line-height:1;min-width:58px;text-align:center}
+.score .st{display:flex;flex-direction:column;gap:2px}
+.score .st b{font-size:16px}
+.score .st span{font-size:13px;color:var(--muted)}
+.diff{margin-top:10px;padding:12px 14px;border-radius:14px;border:1px solid var(--yellow-line);background:var(--yellow-bg);font-size:14px;line-height:1.6}
+.diff b{display:block;color:var(--yellow);font-size:15px}
+.diff.same{border-color:var(--green-line);background:var(--green-bg);display:flex;align-items:center;gap:8px;color:var(--text-2)}
+.diff.same svg{color:var(--green);flex:0 0 18px}
+.new{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;border-radius:8px;background:var(--accent);color:var(--on-accent);margin-inline-end:6px;vertical-align:2px}
+.linkbtn{background:none;border:none;color:var(--accent);font-weight:700;text-decoration:underline;cursor:pointer;padding:0 2px;font-size:13px;min-height:32px}
+.pinbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:8px 8px 8px 12px;border-radius:14px;border:1px solid var(--line);background:var(--bg-2);font-size:14px;color:var(--text-2)}
+.pinbar.active{border-color:var(--accent);color:var(--text);font-weight:700}
+.pinbar .btn svg{width:18px;height:18px}
+#map.picking{cursor:crosshair;outline:2px solid var(--accent)}
+.lrow.soft .st{color:var(--faint)}
+.tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.tool{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px;text-align:right;cursor:pointer;min-height:96px}
+.tool svg{color:var(--accent)}
+.tool b{font-size:15px}
+.tool span{font-size:13px;color:var(--muted)}
+.cmp-wrap{overflow-x:auto;margin-top:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-2)}
+.cmp{width:100%;border-collapse:collapse;font-size:14px}
+.cmp th,.cmp td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle}
+.cmp tbody th{text-align:right;font-weight:600;color:var(--text-2);font-size:13px;min-width:110px}
+.cmp thead th{font-size:14px;font-weight:800}
+.cmp thead th span{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
+.cmp td.best{color:var(--green);font-weight:800}
+
 /* ---------- הדפסה ---------- */
 @media print{
-  .topbar,.seg,.actions,.no-print,#map,.badge{display:none!important}
+  .topbar,.seg,.actions,.no-print,#map,.badge,.score{display:none!important}
   body{background:#fff;color:#000}
   .cat .body{display:block!important}
   .print-head{display:block!important}
@@ -235,13 +266,13 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 
 <script>
 /* =====================================================================
-   מקום·AI  ·  גרסה 1.0.0  ·  AppNest · Barak Aflalo · © 2026
+   מקום·AI  ·  גרסה 1.1.0  ·  AppNest · Barak Aflalo · © 2026
    קובץ אחד. אין שרת: כל המקורות נענים ישירות מהדפדפן (אומת 8.10.2026
    מתוך makom-ai.pages.dev). מקורות: data.gov.il (רישיון פתוח),
    מינהל התכנון (iplan Xplan), OpenStreetMap Nominatim (איתור כתובת).
    נתוני nadlan.gov.il לא בשימוש עד אישור בכתב ממפ"י (תנאי השימוש שלהם).
    ===================================================================== */
-const VERSION = '1.0.2';
+const VERSION = '1.1.0';
 
 /* ---------- יומן שגיאות (לקח StockAI) ---------- */
 const ERRLOG_KEY = 'makom_errlog';
@@ -361,7 +392,12 @@ async function cachedJSON(url, ttl) {
       }
     } catch (e) {}
   }
-  const r = await fetch(url);
+  // זמן קצוב: מקור תקוע לא מקפיא את כל הבדיקה
+  const ac = new AbortController(), to = setTimeout(() => ac.abort(), 25000);
+  let r;
+  try { r = await fetch(url, { signal: ac.signal }); }
+  catch (e) { throw new Error(e.name === 'AbortError' ? 'המקור לא ענה בזמן' : 'אין חיבור למקור'); }
+  finally { clearTimeout(to); }
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const txt = await r.text();
   const j = JSON.parse(txt);
@@ -543,24 +579,107 @@ async function getPlans(lat, lon) {
   const j = await cachedJSON(IPLAN + '?' + p.toString(), 3 * DAY);
   const seen = new Set(), out = [];
   for (const r of (j.results || [])) {
-    const a = r.attributes || {};
-    const id = a['מזהה תכנית ראשי'];
-    const name = a['שם תכנית'];
-    if (!name || name === 'Null' || seen.has(id)) continue;
-    seen.add(id);
-    const status = a['תיאור סטטוס'] || '';
-    const stage = a['שלב תכנוני רצוי'] || '';
-    const goal = String(a['מטרות'] || '').split('^')[1] || '';
-    out.push({
-      id, name: name.trim(), num: a['מספר תכנית'], type: a['תת-סוג תכנית'], status, stage,
-      approved: /אישור/.test(status) && /אושרה|פרסום אישור/.test(stage),
-      dunam: Number(a['שטח תכנית רשום בדונם'] || 0),
-      units: Number(a["שינוי מס' יח' דיור "] || a["שינוי מס' יח' דיור"] || 0),
-      goal: goal.replace(/\s+/g, ' ').trim(),
-      updated: a['תאריך עדכון אחרון'], published: a['תאריך פרסום ברשומות'],
-      link: a['קישור לאתר מידע תכנוני']
-    });
+    const pl = parsePlan(r.attributes || {});
+    if (!pl || seen.has(pl.id)) continue;
+    seen.add(pl.id); out.push(pl);
   }
+  return out;
+}
+const INFRA = /תשתית|תת"ל|תתל|כביש|מסילה|רכבת|מטרו|רק"ל|רכבת קלה|הקו ה(כחול|סגול|ירוק|אדום)|מחלף|תחנת כוח|קו מתח|הולכת גז|מתקן טיהור|מט"ש|שפכים/;
+function parsePlan(a) {
+  const name = a['שם תכנית'];
+  if (!name || name === 'Null') return null;
+  const status = a['תיאור סטטוס'] || '', stage = a['שלב תכנוני רצוי'] || '';
+  const goal = String(a['מטרות'] || '').split('^')[1] || '';
+  const type = a['תת-סוג תכנית'] || '';
+  return {
+    id: a['מזהה תכנית ראשי'], name: name.trim(), num: a['מספר תכנית'], type, status, stage,
+    approved: /אישור/.test(status) && /אושרה|פרסום אישור/.test(stage),
+    dunam: Number(a['שטח תכנית רשום בדונם'] || 0),
+    units: Number(a["שינוי מס' יח' דיור "] || a["שינוי מס' יח' דיור"] || 0),
+    goal: goal.replace(/\s+/g, ' ').trim(),
+    infra: INFRA.test(name + ' ' + type + ' ' + goal.slice(0, 200)),
+    updated: a['תאריך עדכון אחרון'], published: a['תאריך פרסום ברשומות'],
+    link: a['קישור לאתר מידע תכנוני']
+  };
+}
+/* גיאומטריה ברשת ישראל: מרחק מנקודה לפוליגון (0 = בתוך) */
+function segDist(p, a, b) { const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy; let t = L ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); }
+function inRing(p, r) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if (((yi > p[1]) !== (yj > p[1])) && (p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi)) c = !c; } return c; }
+function polyDist(p, rings) { if (rings.some(r => inRing(p, r))) return 0; let m = Infinity; for (const r of rings) for (let i = 1; i < r.length; i++) m = Math.min(m, segDist(p, r[i - 1], r[i])); return m; }
+/* תכניות בסביבה (~300 מ'): אותו שירות, עם סבולת גדולה ועם גבולות התכנית.
+   מחשבים מרחק אמיתי לגבול התכנית. תכניות כלל-עירוניות (מעל 5,000 דונם) לא נכנסות — הן כבר בבדיקה של הנקודה. */
+async function getPlansNear(lat, lon, p) {
+  const d = 0.01;
+  const q = new URLSearchParams({ f: 'json', geometry: lon + ',' + lat, geometryType: 'esriGeometryPoint', sr: '4326', tolerance: '100', mapExtent: [lon - d, lat - d, lon + d, lat + d].join(','), imageDisplay: '800,800,96', layers: 'all:1', returnGeometry: 'true', maxAllowableOffset: '0.00008' });
+  const j = await cachedJSON(IPLAN + '?' + q.toString(), 3 * DAY);
+  const by = new Map();
+  for (const r of (j.results || [])) {
+    const pl = parsePlan(r.attributes || {});
+    if (!pl || (pl.dunam && pl.dunam > 5000)) continue;
+    const rings = ((r.geometry && r.geometry.rings) || []).filter(x => x.length > 2);
+    const cur = by.get(pl.id) || { ...pl, ringsLL: [], ringsXY: [] };
+    for (const ring of rings) { cur.ringsLL.push(ring.map(([x, y]) => [y, x])); cur.ringsXY.push(ring.map(([x, y]) => toITM(y, x))); }
+    by.set(pl.id, cur);
+  }
+  return [...by.values()].map(pl => {
+    const dd = pl.ringsXY.length ? polyDist(p, pl.ringsXY) : 9999;
+    const out = { ...pl, d: dd }; delete out.ringsXY; return out;
+  }).filter(pl => pl.d <= 300).sort((a, b) => a.d - b.d);
+}
+/* ייעוד קרקע בנקודה: שכבות ייעוד במינהל התכנון. שמות השדות לא אומתו מכאן,
+   לכן מזהים לפי תוכן (שדה שהשם שלו מכיל "יעוד"), ואם אין — לא מציגים כלום. */
+async function getLandUse(lat, lon) {
+  const d = 0.002;
+  const q = new URLSearchParams({ f: 'json', geometry: lon + ',' + lat, geometryType: 'esriGeometryPoint', sr: '4326', tolerance: '1', mapExtent: [lon - d, lat - d, lon + d, lat + d].join(','), imageDisplay: '800,600,96', layers: 'all', returnGeometry: 'false' });
+  const j = await cachedJSON(IPLAN + '?' + q.toString(), 3 * DAY);
+  const uses = new Map();
+  for (const r of (j.results || [])) {
+    const a = r.attributes || {};
+    const k = Object.keys(a).find(k => /י?יעוד/.test(k) && !/קוד|מזהה|id/i.test(k));
+    const v = k && String(a[k] || '').trim();
+    if (!v || v === 'Null' || /^\d+$/.test(v)) continue;
+    const pk = Object.keys(a).find(k => /מספר תכנית|שם תכנית/.test(k));
+    if (!uses.has(v)) uses.set(v, { use: v, layer: r.layerName || '', plan: pk ? String(a[pk] || '') : '' });
+  }
+  return [...uses.values()];
+}
+/* התחדשות עירונית: מתחמים מוכרזים (הרשות להתחדשות עירונית, data.gov.il).
+   מזהה המאגר ושמות השדות לא אומתו מהדפדפן — זיהוי שדות לפי שם, ובכשל: לא מציגים. */
+const RENEWAL_RID = '7c8255d0-49ef-49db-8904-4cf917586031';
+async function getRenewal(city, street) {
+  const r = await ck(RENEWAL_RID, { limit: 2000, q: city }, 7 * DAY);
+  const keys = (r.fields || []).map(f => f.id).filter(k => k !== '_id' && k !== 'rank');
+  const pick = re => keys.find(k => re.test(k));
+  const kCity = pick(/ישוב|יישוב|עיר|רשות/), kName = pick(/מתחם/) || pick(/שם/), kStatus = pick(/סטטוס|שלב|מצב/),
+    kUnits = pick(/יח.*ד|יחידות/), kAddr = pick(/כתובת|רחוב|גבול/), kTrack = pick(/מסלול|סוג/), kYear = pick(/תאריך|שנת|שנה/);
+  if (!kCity || !kName) throw new Error('מבנה מאגר ההתחדשות לא זוהה');
+  const c = norm(city);
+  const rows = r.records.filter(x => { const v = norm(x[kCity]); return v && (v === c || v.startsWith(c) || c.startsWith(v)); })
+    .map(x => ({ name: String(x[kName] || '').trim(), status: kStatus ? x[kStatus] : '', units: kUnits ? Number(x[kUnits]) || 0 : 0, addr: kAddr ? String(x[kAddr] || '') : '', track: kTrack ? x[kTrack] : '', year: kYear ? x[kYear] : '' }))
+    .filter(x => x.name);
+  const s = norm(street);
+  const onStreet = s && s.length > 1 ? rows.filter(x => norm(x.name + ' ' + x.addr).includes(s)) : [];
+  return { rows, onStreet };
+}
+/* פנקס הקבלנים (רשם הקבלנים, data.gov.il) — לבדיקת קבלן. זיהוי שדות לפי שם. */
+const KABLAN_RID = '4eb61bd6-18cf-4e7c-9f9c-e166dfa0a2d8';
+async function getContractor(name) {
+  const out = { reg: [], orders: [], regError: null, ordersError: null };
+  const n = norm(name);
+  try {
+    const r = await ck(KABLAN_RID, { limit: 50, q: name }, 7 * DAY);
+    const keys = (r.fields || []).map(f => f.id);
+    const pick = re => keys.find(k => re.test(k));
+    const kName = pick(/SHEM_YESHUT|שם/), kAnaf = pick(/TEUR_ANAF|ענף/), kSivug = pick(/SIVUG|סיווג/), kCity = pick(/SHEM_YISHUV|ישוב/), kStreet = pick(/SHEM_REHOV|רחוב/), kKvutza = pick(/KVUTZA|קבוצה/);
+    if (!kName) throw new Error('מבנה המאגר לא זוהה');
+    out.reg = r.records.filter(x => norm(x[kName]).includes(n)).map(x => ({ name: x[kName], anaf: kAnaf ? x[kAnaf] : '', sivug: [kKvutza && x[kKvutza], kSivug && x[kSivug]].filter(Boolean).join(' '), place: [kStreet && x[kStreet], kCity && x[kCity]].filter(Boolean).join(', ') }));
+  } catch (e) { out.regError = e.message; logErr('kablan: ' + e.message); }
+  try {
+    const r = await ck(RID.safety, { limit: 1000, q: name, fields: ['send_date', 'work_name', 'city_name', 'executor_name', 'category_name', 'felony_name'] }, DAY);
+    const parseD = s => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s || ''); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0; };
+    out.orders = r.records.filter(x => norm(x.executor_name).includes(n)).map(x => ({ ...x, t: parseD(x.send_date) })).sort((a, b) => b.t - a.t);
+  } catch (e) { out.ordersError = e.message; logErr('kablan-safety: ' + e.message); }
   return out;
 }
 
@@ -600,6 +719,38 @@ function analyze(R) {
     else if (!local.length && !widePending.length) add({ cat: 'plan', sev: 'green', ic: 'plan', title: 'רק תכניות כלל-עירוניות מאושרות', text: `${R.plans.length} תכניות מאושרות חלות על כל העיר (למשל ${R.plans[0].name}). לא נמצאה תכנית מקומית בתהליך.` });
   }
 
+  // ---- תכניות בסביבה (עד 300 מ') ----
+  if (has('plansNear')) {
+    const atIds = new Set(has('plans') ? R.plans.map(p => p.id) : []);
+    const N = R.plansNear.filter(p => !atIds.has(p.id));
+    const pend = N.filter(p => !p.approved), infra = pend.filter(p => p.infra), big = pend.filter(p => !p.infra && Math.abs(p.units) >= 30);
+    const one = p => `${p.name}${p.units ? ` (${p.units > 0 ? '+' : ''}${fmtN(p.units)} יח"ד)` : ''}, ${p.d ? fmtM(p.d) : 'צמוד'}`;
+    for (const p of infra.slice(0, 2)) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: `תכנית תשתית בתהליך, ${p.d ? fmtM(p.d) + ' מהבית' : 'צמודה לבית'}`,
+      text: `${p.name}. סטטוס: ${p.status || 'לא צוין'}.${p.goal ? ' ' + p.goal.slice(0, 150) : ''}`, link: p.link && { href: p.link, label: 'פרטי התכנית' }, markers: 'plansNear' });
+    if (big.length) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: `${big.length === 1 ? 'תכנית בנייה גדולה בתהליך' : big.length + ' תכניות בנייה גדולות בתהליך'} עד 300 מ'`,
+      text: big.slice(0, 2).map(one).join(' · ') + '. בנייה סמוכה יכולה להביא שנים של עבודות, ואחר כך יותר אנשים ותנועה, ולפעמים גם שדרוג לשכונה.',
+      more: big.slice(2, 8).map(one), moreTitle: 'עוד', link: big[0].link && { href: big[0].link, label: 'מסמכי התכנית הקרובה' }, markers: 'plansNear' });
+    else if (pend.length > infra.length) add({ cat: 'plan', sev: 'info', ic: 'plan', title: `${pend.length - infra.length} תכניות קטנות בתהליך בסביבה`,
+      text: pend.filter(p => !p.infra).slice(0, 3).map(one).join(' · ') + '.', markers: 'plansNear' });
+    if (!pend.length) add({ cat: 'plan', sev: 'green', ic: 'plan', title: "אין תכניות בתהליך עד 300 מ'", text: N.length ? `${N.length} תכניות מאושרות בסביבה, אין חדשות שבדרך.` : "לא נמצאו תכניות מקוונות ב-300 מ' סביב הבית." });
+  }
+
+  // ---- ייעוד קרקע ----
+  if (has('landuse') && R.landuse.length) {
+    const u = R.landuse.map(x => x.use);
+    add({ cat: 'plan', sev: 'info', ic: 'plan', title: `ייעוד הקרקע בנקודה: ${u[0]}`, text: (u.length > 1 ? `ייעודים נוספים בנקודה: ${u.slice(1, 4).join(', ')}. ` : '') + 'הייעוד קובע מה מותר לבנות על המגרש. לפרטים מלאים: מסמכי התכנית.' });
+  }
+
+  // ---- התחדשות עירונית ----
+  if (has('renewal')) {
+    const { rows, onStreet } = R.renewal;
+    const one = x => `${x.name}${x.units ? ` · ${fmtN(x.units)} יח"ד` : ''}${x.status ? ` · ${x.status}` : ''}`;
+    if (onStreet.length) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: `מתחם התחדשות עירונית ברחוב ${R.addr.street}`,
+      text: onStreet.slice(0, 2).map(one).join(' | ') + '. התחדשות יכולה להעלות את ערך הדירות, אבל גם להביא שנים של עבודות. כדאי לברר באיזה שלב הפרויקט ואם הבניין עצמו כלול.' });
+    else if (rows.length) add({ cat: 'plan', sev: 'info', ic: 'plan', title: `${rows.length} מתחמי התחדשות עירונית מוכרזים ב${R.addr.city}`,
+      text: 'לא נמצא מתחם שהשם או הכתובת שלו כוללים את הרחוב שנבדק.', more: rows.slice(0, 8).map(one), moreTitle: 'המתחמים' });
+  }
+
   // ---- אנטנות ----
   if (has('antennas')) {
     const A = R.antennas, near100 = A.filter(a => a.d <= 100), in300 = A.filter(a => a.d <= 300), in500 = A.filter(a => a.d <= 500);
@@ -610,7 +761,7 @@ function analyze(R) {
     const base = n ? `הקרובה: ${n.co || ''}, ${n.addr || ''} (${fmtM(n.d)}).${isFinite(n.pct) && n.pct > 0 ? ` בבדיקה האחרונה (${n.check || 'ללא תאריך'}) נמדדו ${n.pct}% מסף הבריאות.` : ''}` : '';
     if (noPermit.length) add({ cat: 'env', sev: 'red', ic: 'antenna', title: `${noPermit.length} אנטנות בלי היתר קרינה בטווח 300 מ'`, text: base, markers: 'antennas' });
     else if (near100.length) add({ cat: 'env', sev: 'yellow', ic: 'antenna', title: `אנטנה במרחק ${fmtM(near100[0].d)} מהבית`, text: base + (oldest && oldest < new Date().getFullYear() - 3 ? ` חלק מהבדיקות הרשמיות ישנות (${oldest}).` : ''), markers: 'antennas' });
-    else if (in500.length) add({ cat: 'env', sev: 'green', ic: 'antenna', title: `${in500.length} אנטנות ברדיוס 500 מ'`, text: base + (maxPct ? ` הערך הגבוה ביותר שנמדד ביניהן: ${maxPct}% מהסף.` : ''), markers: 'antennas' });
+    else if (in500.length) add({ cat: 'env', sev: 'green', ic: 'antenna', title: in500.length === 1 ? "אנטנה אחת ברדיוס 500 מ'" : `${in500.length} אנטנות ברדיוס 500 מ'`, text: base + (maxPct ? ` הערך הגבוה ביותר שנמדד ביניהן: ${maxPct}% מהסף.` : ''), markers: 'antennas' });
     else add({ cat: 'env', sev: 'green', ic: 'antenna', title: "אין אנטנות ברדיוס 500 מ'", text: A.length ? `הקרובה במרחק ${fmtM(A[0].d)}.` : 'לא נמצאו אנטנות בקילומטר הקרוב.' });
   }
 
@@ -656,7 +807,7 @@ function analyze(R) {
   if (has('safety')) {
     const s = R.safety;
     if (s.onStreet.length) add({ cat: 'build', sev: 'red', ic: 'hardhat', title: `צו בטיחות לאתר בנייה ברחוב ${R.addr.street}`, text: s.onStreet.slice(0, 2).map(x => `${x.work_name} · ${x.executor_name || ''} · ${x.felony_name || ''} (${x.send_date})`).join(' | ') });
-    if (s.recent.length) add({ cat: 'build', sev: 'info', ic: 'hardhat', title: `${s.recent.length} צווי בטיחות לאתרי בנייה ביישוב בשנה האחרונה`, text: 'צווים שהוציא משרד העבודה לאתרים עם ליקויי בטיחות. שימושי לבדיקת קבלן לפני שקונים מקבלן.', more: s.recent.slice(0, 6).map(x => `${x.send_date} · ${x.work_name} · ${x.executor_name || ''}`), moreTitle: 'האחרונים' });
+    if (s.recent.length) add({ cat: 'build', sev: 'info', ic: 'hardhat', title: s.recent.length === 1 ? 'צו בטיחות אחד לאתר בנייה ביישוב בשנה האחרונה' : `${s.recent.length} צווי בטיחות לאתרי בנייה ביישוב בשנה האחרונה`, text: 'צווים שהוציא משרד העבודה לאתרים עם ליקויי בטיחות. שימושי לבדיקת קבלן לפני שקונים מקבלן.', more: s.recent.slice(0, 6).map(x => `${x.send_date} · ${x.work_name} · ${x.executor_name || ''}`), moreTitle: 'האחרונים' });
   }
 
   // ---- חינוך ----
@@ -669,7 +820,7 @@ function analyze(R) {
     const pikSet = [...new Set(el.map(s => s.pik).filter(Boolean))];
     const other = S.filter(s => s.kind === 'other' && s.d <= 1000).length;
     add({ cat: 'edu', sev: el.length && kg.length ? 'green' : 'yellow', ic: 'school',
-      title: `${kg.length} גנים ב-500 מ', ${el.length} יסודיים בק"מ, ${hi.length} על-יסודיים${other ? ` ועוד ${other} מוסדות` : ''}`,
+      title: `${kg.length === 1 ? 'גן אחד' : kg.length + ' גנים'} ב-500 מ', ${el.length === 1 ? 'יסודי אחד' : el.length + ' יסודיים'} בק"מ, ${hi.length === 1 ? 'על-יסודי אחד' : hi.length + ' על-יסודיים'}${other ? ` ועוד ${other} מוסדות` : ''}`,
       text: [ne && `היסודי הקרוב: ${w(ne)}`, nk && `הגן הקרוב: ${w(nk)}`, nh && `העל-יסודי הקרוב: ${w(nh)}`].filter(Boolean).join('. ') + '.' +
         (pikSet.length ? ` סוגי פיקוח ביסודיים הקרובים: ${pikSet.join(', ')}.` : '') + ' (סיווג המוסדות לפי משרד החינוך, עדכון אחרון 2015.)', markers: 'schools' });
   }
@@ -692,33 +843,77 @@ function analyze(R) {
 /* =====================================================================
    הרצת בדיקה
    ===================================================================== */
+/* ציון אזור: שקוף ופשוט. 10, פחות 2 לכל דגל אדום ו-0.7 לכל צהוב. לא חוות דעת — כלי השוואה בין כתובות. */
+function scoreOf(F) {
+  const c = counts(F);
+  const s = Math.max(1, Math.min(10, 10 - 2 * c.red - 0.7 * c.yellow));
+  return { s: Math.round(s * 10) / 10, red: c.red, yellow: c.yellow,
+    label: s >= 8 ? 'נראה טוב' : s >= 6 ? 'סביר, עם נקודות לבדיקה' : s >= 4 ? 'כדאי לבדוק לעומק' : 'הרבה דגלים' };
+}
+/* "מה השתנה מאז": תמונת מצב לכל כתובת שמורה */
+// מספרים (מרחקים, כמויות) לא נכנסים למפתח — אחרת כל תזוזה של 10 מ' נראית כ"שינוי"
+const fkey = f => [f.cat, f.ic, f.sev, String(f.title).replace(/[\d.,]+/g, '#')].join('|');
+function snapOf(R) { return { at: R.at, keys: R.findings.filter(f => f.sev !== 'info').map(fkey), titles: Object.fromEntries(R.findings.filter(f => f.sev !== 'info').map(f => [fkey(f), f.title])) }; }
+function saveSnap(R) { const s = store.get('snaps', {}); s[label(R.addr)] = snapOf(R); store.set('snaps', s); }
+function diffWithSnap(R) {
+  const prev = store.get('snaps', {})[label(R.addr)];
+  if (!prev) return null;
+  const now = snapOf(R), pk = new Set(prev.keys), nk = new Set(now.keys);
+  const added = R.findings.filter(f => f.sev !== 'info' && !pk.has(fkey(f)));
+  const removed = prev.keys.filter(k => !nk.has(k)).map(k => prev.titles[k] || k);
+  added.forEach(f => f.isNew = true);
+  return { since: prev.at, added, removed };
+}
+
 const STEPS = [
-  ['plans', 'תכניות בנייה (מינהל התכנון)'], ['antennas', 'אנטנות ומדידות קרינה'], ['factories', 'מפעלים מזהמים (מפל"ס)'],
+  ['plans', 'תכניות בנייה בנקודה (מינהל התכנון)'], ['plansNear', "תכניות בסביבה, עד 300 מ'"], ['landuse', 'ייעוד הקרקע'], ['renewal', 'התחדשות עירונית'],
+  ['antennas', 'אנטנות ומדידות קרינה'], ['factories', 'מפעלים מזהמים (מפל"ס)'],
   ['crime', 'נתוני משטרה'], ['schools', 'מוסדות חינוך'], ['bus', 'תחבורה ציבורית'], ['air', 'תחנות ניטור אוויר'],
   ['gas', 'תחנות דלק'], ['safety', 'צווי בטיחות באתרי בנייה']
 ];
+// מקורות "רכים": אם לא ענו, לא מציגים התראה (מבנה לא אומת / לא קריטי). נרשמים ביומן השגיאות.
+const SOFT = new Set(['landuse', 'renewal']);
 let CURRENT = null;
-async function runCheck(addr) {
-  setScreen('loading');
-  const box = document.getElementById('lsteps');
-  const mark = (k, ok, msg) => { const el = document.getElementById('ls-' + k); if (!el) return; el.className = 'lrow card ' + (ok ? 'ok' : 'err'); el.querySelector('.st').innerHTML = icon(ok ? 'check' : 'x', 18); if (msg) el.querySelector('.m').textContent = msg; };
-  box.innerHTML = `<div class="lrow card" id="ls-geo"><span class="st"><span class="spin"></span></span><span class="m">מאתר את הכתובת על המפה</span></div>` +
-    STEPS.map(([k, t]) => `<div class="lrow card" id="ls-${k}"><span class="st"><span class="spin"></span></span><span class="m">${t}</span></div>`).join('');
+
+/* איסוף: כל המקורות לכתובת אחת. משמש גם את הבדיקה, גם את ההשוואה. */
+async function collect(addr, mark = () => {}) {
+  await ensureLibs();
   let geo;
-  try { await ensureLibs(); geo = await geocode(addr.city, addr.street, addr.num); mark('geo', true); }
-  catch (e) { mark('geo', false, 'איתור הכתובת נכשל: ' + e.message); showError('לא הצלחנו לאתר את הכתובת. בדוק את שם הרחוב ונסה שוב.'); return; }
+  if (addr.geo && isFinite(addr.geo.lat) && isFinite(addr.geo.lon)) geo = { lat: +addr.geo.lat, lon: +addr.geo.lon, precision: 'manual' };
+  else {
+    const gc = store.get('geocache', {}), k = label(addr), hit = gc[k];
+    if (hit && Date.now() - hit.t < 30 * DAY) geo = hit.g;
+    else { geo = await geocode(addr.city, addr.street, addr.num); gc[k] = { g: geo, t: Date.now() }; const ks = Object.keys(gc); if (ks.length > 60) delete gc[ks[0]]; store.set('geocache', gc); }
+  }
+  mark('geo', true);
   const p = toITM(geo.lat, geo.lon);
   const R = { addr, geo, p, at: new Date().toISOString() };
   const jobs = {
-    plans: () => getPlans(geo.lat, geo.lon), antennas: () => getAntennas(p), factories: () => getFactories(p),
+    plans: () => getPlans(geo.lat, geo.lon), plansNear: () => getPlansNear(geo.lat, geo.lon, p), landuse: () => getLandUse(geo.lat, geo.lon),
+    renewal: () => getRenewal(addr.city, addr.street),
+    antennas: () => getAntennas(p), factories: () => getFactories(p),
     crime: () => getCrime(addr.code), schools: () => getSchools(p), bus: () => getBus(p, addr.code),
     air: () => getAir(p), gas: () => getGas(p), safety: () => getSafety(addr.city, addr.street)
   };
   await Promise.all(Object.entries(jobs).map(async ([k, fn]) => {
     try { R[k] = await fn(); mark(k, true); }
-    catch (e) { R[k] = { error: e.message }; logErr(k + ': ' + e.message); mark(k, false, STEPS.find(s => s[0] === k)[1] + ' · לא זמין כרגע'); }
+    catch (e) { R[k] = { error: e.message }; logErr(k + ': ' + e.message); mark(k, SOFT.has(k) ? null : false, STEPS.find(s => s[0] === k)[1] + ' · לא זמין כרגע'); }
   }));
   R.findings = analyze(R);
+  R.score = scoreOf(R.findings);
+  return R;
+}
+async function runCheck(addr) {
+  setScreen('loading');
+  const box = document.getElementById('lsteps');
+  const mark = (k, ok, msg) => { const el = document.getElementById('ls-' + k); if (!el) return; el.className = 'lrow card ' + (ok ? 'ok' : ok === null ? 'soft' : 'err'); el.querySelector('.st').innerHTML = icon(ok ? 'check' : ok === null ? 'alert' : 'x', 18); if (msg) el.querySelector('.m').textContent = msg; };
+  box.innerHTML = `<div class="lrow card" id="ls-geo"><span class="st"><span class="spin"></span></span><span class="m">${addr.geo ? 'משתמש במיקום שסימנת על המפה' : 'מאתר את הכתובת על המפה'}</span></div>` +
+    STEPS.map(([k, t]) => `<div class="lrow card" id="ls-${k}"><span class="st"><span class="spin"></span></span><span class="m">${t}</span></div>`).join('');
+  let R;
+  try { R = await collect(addr, mark); }
+  catch (e) { mark('geo', false, 'איתור הכתובת נכשל: ' + e.message); showError('לא הצלחנו לאתר את הכתובת. בדוק את שם הרחוב ונסה שוב.'); return; }
+  R.diff = diffWithSnap(R);
+  if (isSaved(addr)) saveSnap(R);
   CURRENT = R;
   addRecent(addr);
   renderResult();
@@ -758,6 +953,10 @@ function renderHome() {
     <button class="btn primary block" id="bGo" type="submit" disabled>${icon('search', 20)} בדוק כתובת</button>
   </form>
   ${saved.length ? `<div class="sec-title">כתובות שמורות</div><div class="card">${saved.map((a, i) => `<div class="list-item" role="button" tabindex="0" data-saved="${i}"><span style="color:var(--accent)">${icon('pin', 20)}</span><div class="tt"><b>${esc(label(a))}</b></div></div>`).join('')}</div>` : ''}
+  <div class="tools">
+    <button class="card tool" id="tCompare">${icon('list', 22)}<b>השוואת כתובות</b><span>${saved.length >= 2 ? `${saved.length} כתובות שמורות` : 'שומרים 2 כתובות ומשווים'}</span></button>
+    <button class="card tool" id="tKablan">${icon('hardhat', 22)}<b>בדיקת קבלן</b><span>פנקס הקבלנים וצווי בטיחות</span></button>
+  </div>
   ${recent.length ? `<div class="sec-title">חיפושים אחרונים</div><div class="chips">${recent.map((a, i) => `<button class="chip" data-recent="${i}">${esc(label(a))}</button>`).join('')}</div>` : ''}
   <div class="sec-title">מה נבדק</div>
   <div class="what">
@@ -767,11 +966,15 @@ function renderHome() {
     <div class="card"><b>פשיעה</b>תיקי משטרה ביישוב ומגמה</div>
     <div class="card"><b>חינוך ותחבורה</b>גנים, בתי ספר ותחנות קרובות</div>
     <div class="card"><b>בטיחות בנייה</b>צווי בטיחות לאתרי בנייה</div>
+    <div class="card"><b>סביב הבית</b>תכניות עד 300 מ', תשתיות והתחדשות עירונית</div>
+    <div class="card"><b>ציון ומעקב</b>ציון אזור, השוואה ומה השתנה מאז</div>
   </div>
   <div class="foot">כל הנתונים ממאגרים פתוחים של המדינה ומוצגים כפי שהם. זה לא ייעוץ משפטי, שמאי או הנדסי. לפני עסקה מאמתים מול הגורם המוסמך.</div>
   <a class="badge" href="https://appnest-store.pages.dev" target="_blank" rel="noopener">AppNest · Barak Aflalo · גרסה ${VERSION}</a>
 </section>`;
   app.querySelectorAll('[data-recent]').forEach(b => b.onclick = () => go(recent[+b.dataset.recent]));
+  document.getElementById('tCompare').onclick = () => saved.length >= 2 ? renderCompare() : toast('צריך לפחות 2 כתובות שמורות. בודקים כתובת ולוחצים "שמור כתובת"');
+  document.getElementById('tKablan').onclick = () => renderKablan();
   app.querySelectorAll('[data-saved]').forEach(b => { b.onclick = () => go(saved[+b.dataset.saved]); b.onkeydown = e => { if (e.key === 'Enter') b.click(); }; });
   initSearch();
 }
@@ -805,19 +1008,21 @@ async function initSearch() {
     go({ city: city.name, code: city.code, street: iStreet.value.trim(), num: iNum.value.replace(/\D/g, '') });
   };
 }
-function go(a) { pendingAddr = a; try { history.replaceState(null, '', '?' + new URLSearchParams({ c: a.code, city: a.city, s: a.street || '', n: a.num || '' })); } catch (e) {} runCheck(a); }
+function go(a) { pendingAddr = a; try { const q = { c: a.code, city: a.city, s: a.street || '', n: a.num || '' }; if (a.geo) q.ll = a.geo.lat + ',' + a.geo.lon; history.replaceState(null, '', '?' + new URLSearchParams(q)); } catch (e) {} runCheck(a); }
 function addRecent(a) { const r = store.get('recent', []).filter(x => label(x) !== label(a)); r.unshift(a); store.set('recent', r.slice(0, 8)); }
 
 /* ---------- תוצאה ---------- */
 const VIEWS = [['report', 'דוח', 'list'], ['map', 'מפה', 'map'], ['summary', 'סיכום', 'text']];
 function renderResult() {
   const R = CURRENT, v = store.get('view', store.get('defaultView', 'report'));
-  const prec = { house: 'מיקום מדויק לפי מספר הבית', street: 'מיקום לפי הרחוב (מספר הבית לא אותר במפה)', city: 'מיקום לפי מרכז היישוב בלבד. המרחקים משוערים.' }[R.geo.precision];
+  const prec = { house: 'מיקום מדויק לפי מספר הבית', street: 'מיקום לפי הרחוב (מספר הבית לא אותר במפה)', city: 'מיקום לפי מרכז היישוב בלבד. המרחקים משוערים. אפשר לתקן במפה.', manual: 'מיקום שסימנת ידנית על המפה' }[R.geo.precision];
   screen = 'result'; document.getElementById('btnBack').classList.remove('hidden');
   app.innerHTML = `<section class="screen">
   <div class="print-head">${esc(store.get('user', ''))} · ${new Date().toLocaleDateString('he-IL')} · מקום·AI</div>
   <div class="addr"><div class="sub">${esc(R.addr.city)}</div><h1 class="display">${esc(R.addr.street ? [R.addr.street, R.addr.num].filter(Boolean).join(' ') : R.addr.city)}</h1>
-  <div class="prec ${R.geo.precision === 'city' ? 'warn' : ''}">${prec}</div></div>
+  <div class="prec ${R.geo.precision === 'city' ? 'warn' : ''}">${prec}${R.geo.precision !== 'house' ? ` <button class="linkbtn no-print" id="bFixPin">${R.geo.precision === 'manual' ? 'לשנות' : 'לתקן מיקום'}</button>` : ''}</div></div>
+  ${scoreHtml(R)}
+  ${diffHtml(R)}
   <div class="seg" role="group" aria-label="סוג תצוגה">${VIEWS.map(([k, t, ic]) => `<button aria-pressed="${k === v}" data-view="${k}">${icon(ic)}${t}</button>`).join('')}</div>
   <div id="view"></div>
   <div class="actions no-print">
@@ -832,24 +1037,44 @@ function renderResult() {
   document.getElementById('bSave').onclick = e => { toggleSave(R.addr); e.target.textContent = isSaved(R.addr) ? 'שמורה' : 'שמור כתובת'; };
   document.getElementById('bShare').onclick = shareResult;
   document.getElementById('bPrint').onclick = () => { drawView('report'); setTimeout(() => window.print(), 300); };
+  const fx = document.getElementById('bFixPin');
+  if (fx) fx.onclick = () => { store.set('view', 'map'); app.querySelectorAll('[data-view]').forEach(x => x.setAttribute('aria-pressed', x.dataset.view === 'map')); drawView('map'); setTimeout(startPinMove, 200); };
+  const sc = document.getElementById('bScore');
+  if (sc) sc.onclick = () => { const s = R.score, fl = failed();
+    const m = modal(`<h2>איך מחושב הציון</h2><p style="color:var(--text-2)">מתחילים מ-10. על כל דגל אדום (לבדוק) מורידים 2, ועל כל צהוב (לשים לב) מורידים 0.7. הציון לא יורד מתחת ל-1.</p>
+      <div class="card" style="padding:14px;line-height:1.9">${s.red} אדומים × 2 = ${(s.red * 2).toFixed(1)}<br>${s.yellow} צהובים × 0.7 = ${(s.yellow * 0.7).toFixed(1)}<br><b>ציון: ${s.s} מתוך 10</b></div>
+      <p style="color:var(--text-2);font-size:14px">הציון נועד להשוואה בין כתובות, לא כחוות דעת על הבית. דגל אחד חמור יכול להיות חשוב יותר מכמה קלים, אז תמיד קוראים את הדגלים עצמם.${fl.length ? ` שימו לב: ${fl.length} מקורות לא ענו בבדיקה הזו, אז הציון חלקי.` : ''}${R.geo.precision === 'city' ? ' המיקום לפי מרכז היישוב, לכן דגלי מרחק לא נספרו.' : ''}</p>
+      <button class="btn primary block" id="mC">סגור</button>`); m.querySelector('#mC').onclick = () => m.remove(); };
   drawView(v);
+}
+function scoreHtml(R) {
+  const s = R.score; if (!s) return '';
+  const col = s.s >= 8 ? 'var(--green)' : s.s >= 6 ? 'var(--yellow)' : 'var(--red)';
+  return `<button class="score" id="bScore" aria-label="ציון אזור ${s.s} מתוך 10, הסבר"><span class="sn" style="color:${col}">${s.s}</span><span class="st"><b>ציון אזור · ${s.label}</b><span>${s.red} לבדוק · ${s.yellow} לשים לב · איך מחושב?</span></span></button>`;
+}
+function diffHtml(R) {
+  const d = R.diff; if (!d) return '';
+  const since = new Date(d.since).toLocaleDateString('he-IL');
+  if (!d.added.length && !d.removed.length) return `<div class="diff same">${icon('check', 18)} לא השתנה דבר מאז הבדיקה הקודמת (${since}).</div>`;
+  return `<div class="diff"><b>מה השתנה מאז ${since}</b>${d.added.length ? `<div>חדש: ${d.added.map(f => esc(f.title)).join(' · ')}</div>` : ''}${d.removed.length ? `<div>כבר לא מופיע: ${d.removed.map(esc).join(' · ')}</div>` : ''}</div>`;
 }
 function drawView(v) {
   const el = document.getElementById('view');
   if (mapObj) { try { mapObj.remove(); } catch (e) {} mapObj = null; }
   if (v === 'map') el.innerHTML = viewMap(); else if (v === 'summary') el.innerHTML = viewSummary(); else el.innerHTML = viewReport();
   el.querySelectorAll('.cat > button').forEach(b => b.onclick = () => { b.parentElement.classList.toggle('open'); b.setAttribute('aria-expanded', b.parentElement.classList.contains('open')); });
+  el.querySelectorAll('[data-kablan]').forEach(b => b.onclick = e => { e.preventDefault(); renderKablan(); });
   if (v === 'map') setTimeout(drawMap, 30);
 }
 const SEV_ORDER = { red: 0, yellow: 1, info: 2, green: 3 };
 const sevColor = s => ({ red: 'var(--red)', yellow: 'var(--yellow)', green: 'var(--green)', info: 'var(--blue)' }[s]);
 function flagHtml(f) {
-  return `<div class="flag ${f.sev}"><div class="ic">${icon(f.ic)}</div><div style="min-width:0;flex:1"><div class="t">${esc(f.title)}</div><div class="x">${esc(f.text)}</div>
+  return `<div class="flag ${f.sev}"><div class="ic">${icon(f.ic)}</div><div style="min-width:0;flex:1"><div class="t">${f.isNew ? '<span class="new">חדש</span>' : ''}${esc(f.title)}</div><div class="x">${esc(f.text)}</div>
   ${f.more && f.more.length ? `<ul class="more">${f.more.map(m => `<li>${esc(m)}</li>`).join('')}</ul>` : ''}
   ${f.link ? `<a class="go" href="${esc(f.link.href)}" target="_blank" rel="noopener">${esc(f.link.label)} ↗</a>` : ''}</div></div>`;
 }
 function counts(F) { return { red: F.filter(f => f.sev === 'red').length, yellow: F.filter(f => f.sev === 'yellow').length, green: F.filter(f => f.sev === 'green').length }; }
-function failed() { return STEPS.filter(([k]) => CURRENT[k] && CURRENT[k].error).map(s => s[1]); }
+function failed(R = CURRENT) { return STEPS.filter(([k]) => !SOFT.has(k) && R[k] && R[k].error).map(s => s[1]); }
 
 /* --- א · דוח --- */
 function viewReport() {
@@ -874,6 +1099,7 @@ function checklist() {
   <a class="todo" href="https://mekarkein-online.justice.gov.il/voucher/main" target="_blank" rel="noopener"><span class="box"></span><span class="tt"><b>נסח טאבו</b><span>בעלות, משכנתאות, עיקולים והערות אזהרה</span></span><span class="tag">₪15</span></a>
   ${plan ? `<a class="todo" href="${esc(plan.link)}" target="_blank" rel="noopener"><span class="box"></span><span class="tt"><b>מסמכי התכנית שבתהליך</b><span>${esc(plan.name)}</span></span><span class="tag">חינם</span></a>` : ''}
   <a class="todo" href="https://www.nadlan.gov.il/" target="_blank" rel="noopener"><span class="box"></span><span class="tt"><b>מחירי עסקאות באזור</b><span>באתר הנדל"ן הממשלתי, מחפשים את הכתובת</span></span><span class="tag">חינם</span></a>
+  <a class="todo" href="#" data-kablan><span class="box"></span><span class="tt"><b>קונים מקבלן? בודקים אותו</b><span>רישום בפנקס הקבלנים וצווי בטיחות</span></span><span class="tag">חינם</span></a>
   <div class="todo"><span class="box"></span><span class="tt"><b>תיק בניין והיתרים</b><span>במחלקת ההנדסה של ${esc(a.city)}: היתר, חריגות בנייה, צווי הריסה</span></span></div>`;
 }
 
@@ -887,6 +1113,7 @@ const LAYERS = [
   ['gas', 'דלק', '#C9A227', g => `${g.co || ''} ${g.name || ''}`, 1500],
   ['air', 'ניטור אוויר', '#B48CF0', a => a.name, 99999]
 ];
+const PLAN_COL = { pend: '#E8B04A', ok: '#8C887F', infra: '#E0607A' };
 function viewMap() {
   const R = CURRENT, on = store.get('mapLayers', null);
   const near = [];
@@ -895,11 +1122,13 @@ function viewMap() {
     if (arr[0] && arr[0].d <= r) near.push({ k, t, col, it: arr[0], n: arr.filter(x => x.d <= r).length, r });
   }
   near.sort((a, b) => a.it.d - b.it.d);
-  return `<div id="map" role="img" aria-label="מפת הסביבה"></div>
-  <div class="chips" style="margin-top:12px">${LAYERS.map(([k, t, col]) => { const n = R[k] && !R[k].error ? R[k].length : 0; return n ? `<button class="chip ${!on || on.includes(k) ? 'on' : ''}" data-layer="${k}"><span class="dot" style="background:${col}"></span>${t} (${n})</button>` : ''; }).join('')}</div>
+  const pn = R.plansNear && !R.plansNear.error ? R.plansNear.filter(x => x.ringsLL && x.ringsLL.length).length : 0;
+  return `<div class="pinbar no-print" id="pinBar"><span id="pinMsg">הסיכה לא במקום הנכון?</span><button class="btn sm" id="bPin">${icon('pin', 18)} הזזת סיכה</button></div>
+  <div id="map" role="img" aria-label="מפת הסביבה"></div>
+  <div class="chips" style="margin-top:12px">${pn ? `<button class="chip ${!on || on.includes('plansNear') ? 'on' : ''}" data-layer="plansNear"><span class="dot" style="background:${PLAN_COL.pend}"></span>תכניות בסביבה (${pn})</button>` : ''}${LAYERS.map(([k, t, col]) => { const n = R[k] && !R[k].error ? R[k].length : 0; return n ? `<button class="chip ${!on || on.includes(k) ? 'on' : ''}" data-layer="${k}"><span class="dot" style="background:${col}"></span>${t} (${n})</button>` : ''; }).join('')}</div>
   <div class="sec-title">הכי קרוב לבית</div>
   <div class="near">${near.map(x => `<div><span class="sd" style="background:${x.col}"></span><div><b>${x.t}</b><span>${esc(nearText(x))}</span></div><span class="d">${fmtM(x.it.d)}</span></div>`).join('') || '<div class="empty">לא נמצאו פריטים קרובים</div>'}</div>
-  ${(R.plans && !R.plans.error && R.plans.length) ? `<div class="sec-title">תכניות שחלות על הנקודה</div>${R.findings.filter(f => f.cat === 'plan').map(flagHtml).join('')}` : ''}`;
+  ${R.findings.some(f => f.cat === 'plan') ? `<div class="sec-title">תכניות בנקודה ובסביבה</div>${R.findings.filter(f => f.cat === 'plan').map(flagHtml).join('')}` : ''}`;
 }
 function nearText(x) {
   const it = x.it;
@@ -919,6 +1148,16 @@ function drawMap() {
   L.circle([R.geo.lat, R.geo.lon], { radius: 500, color: '#D4AF37', weight: 1, dashArray: '4 6', fillOpacity: .04 }).addTo(mapObj);
   L.circleMarker([R.geo.lat, R.geo.lon], { radius: 10, color: '#0B0B0D', weight: 3, fillColor: '#D4AF37', fillOpacity: 1 }).addTo(mapObj).bindPopup('הכתובת שנבדקה');
   const on = store.get('mapLayers', null), groups = {};
+  // גבולות תכניות בסביבה: כתום = בתהליך, אדום = תשתית בתהליך, אפור = מאושרת
+  if (R.plansNear && !R.plansNear.error) {
+    const g = L.layerGroup();
+    R.plansNear.filter(pl => pl.ringsLL && pl.ringsLL.length).slice(0, 40).reverse().forEach(pl => {
+      const col = pl.approved ? PLAN_COL.ok : pl.infra ? PLAN_COL.infra : PLAN_COL.pend;
+      L.polygon(pl.ringsLL, { color: col, weight: 2, dashArray: pl.approved ? '2 4' : null, fillOpacity: pl.approved ? .04 : .12 })
+        .bindPopup(`<div dir="rtl" style="font-family:Assistant,sans-serif"><b>${esc(pl.name)}</b><br>${esc(pl.status || '')}${pl.units ? `<br>${pl.units > 0 ? '+' : ''}${fmtN(pl.units)} יח"ד` : ''}<br>${pl.d ? fmtM(pl.d) + ' מהבית' : 'חלה על הבית'}${pl.link ? `<br><a href="${esc(pl.link)}" target="_blank" rel="noopener">פרטי התכנית</a>` : ''}</div>`).addTo(g);
+    });
+    groups.plansNear = g; if (!on || on.includes('plansNear')) g.addTo(mapObj);
+  }
   for (const [k, , col, pop] of LAYERS) {
     const arr = R[k] && !R[k].error ? R[k] : []; if (!arr.length) continue;
     const g = L.layerGroup();
@@ -930,6 +1169,36 @@ function drawMap() {
     const isOn = b.classList.toggle('on'); isOn ? g.addTo(mapObj) : mapObj.removeLayer(g);
     store.set('mapLayers', [...app.querySelectorAll('[data-layer].on')].map(x => x.dataset.layer));
   });
+  const bp = document.getElementById('bPin'); if (bp) bp.onclick = startPinMove;
+}
+/* הזזת סיכה: לחיצה על המקום הנכון במפה → בדיקה מחדש מהנקודה הזו.
+   פותר כתובות ש-OpenStreetMap לא מכיר (נתפס: "שירת הים 5, זכרון יעקב" יצא ממרכז היישוב). */
+function startPinMove() {
+  if (!mapObj) return;
+  const bar = document.getElementById('pinBar'), msg = document.getElementById('pinMsg'), bp = document.getElementById('bPin');
+  const mapEl = document.getElementById('map');
+  const stop = () => {
+    if (mapObj) mapObj.off('click', pick);
+    bar.classList.remove('active'); msg.textContent = 'הסיכה לא במקום הנכון?';
+    bp.innerHTML = icon('pin', 18) + ' הזזת סיכה'; bp.onclick = startPinMove; mapEl.classList.remove('picking');
+  };
+  const pick = e => {
+    stop();
+    const ll = e.latlng, tmp = L.circleMarker(ll, { radius: 10, color: '#0B0B0D', weight: 3, fillColor: '#F2EFE6', fillOpacity: 1 }).addTo(mapObj);
+    const m = modal(`<h2>לבדוק מהנקודה הזו?</h2><p style="color:var(--text-2)">כל המרחקים, התכניות והדגלים יחושבו מחדש מהמיקום שסימנת.${isSaved(CURRENT.addr) ? ' המיקום יישמר גם בכתובת השמורה.' : ''}</p>
+      <div class="actions"><button class="btn" id="pN">ביטול</button><button class="btn primary" id="pY">בדיקה מחדש</button></div>`);
+    m.querySelector('#pN').onclick = () => { tmp.remove(); m.remove(); };
+    m.querySelector('#pY').onclick = () => {
+      m.remove();
+      const a = { ...CURRENT.addr, geo: { lat: +ll.lat.toFixed(6), lon: +ll.lng.toFixed(6) } };
+      if (isSaved(a)) store.set('saved', store.get('saved', []).map(x => label(x) === label(a) ? a : x));
+      go(a);
+    };
+  };
+  bar.classList.add('active'); msg.textContent = 'לוחצים על המיקום הנכון של הבית במפה'; mapEl.classList.add('picking');
+  bp.textContent = 'ביטול'; bp.onclick = stop;
+  mapObj.on('click', pick);
+  mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 /* --- ג · סיכום --- */
@@ -946,14 +1215,114 @@ function viewSummary() {
   ${checklist()}`;
 }
 
+/* ---------- השוואת כתובות ---------- */
+function metrics(R) {
+  const ok = k => R[k] && !R[k].error ? R[k] : null;
+  const F = R.findings, pl = ok('plans'), pn = ok('plansNear'), an = ok('antennas'), fa = ok('factories'), cr = ok('crime'), sc = ok('schools'), bu = ok('bus');
+  const atIds = new Set(pl ? pl.map(p => p.id) : []);
+  const crCh = cr && cr.prevTotal && cr.quarters.length >= 4 ? (cr.total - cr.prevTotal) / cr.prevTotal * 100 : null;
+  return {
+    score: R.score.s, red: R.score.red, yellow: R.score.yellow,
+    planHere: pl ? pl.filter(p => !p.approved && p.dunam > 0 && p.dunam <= 500).length : null,
+    planNear: pn ? pn.filter(p => !p.approved && !atIds.has(p.id)).length : null,
+    ant: an ? (an[0] ? an[0].d : 1001) : null,
+    fac: fa ? fa.filter(f => f.d <= 3000).length : null,
+    crime: crCh,
+    kg: sc ? sc.filter(s => s.kind === 'kg' && s.d <= 500).length : null,
+    el: sc ? sc.filter(s => s.kind === 'elem' && s.d <= 1000).length : null,
+    bus: bu ? bu.filter(b => b.d <= 400).length : null,
+    prec: R.geo.precision
+  };
+}
+const CMP_ROWS = [
+  ['score', 'ציון אזור', 'high', v => v + ' מתוך 10'],
+  ['red', 'דגלים אדומים', 'low', v => v],
+  ['yellow', 'דגלים צהובים', 'low', v => v],
+  ['planHere', 'תכניות בתהליך על הבית', 'low', v => v],
+  ['planNear', "תכניות בתהליך עד 300 מ'", 'low', v => v],
+  ['ant', 'אנטנה קרובה', 'high', v => v > 1000 ? 'מעל 1 ק"מ' : fmtM(v)],
+  ['fac', 'מפעלים מדווחים ב-3 ק"מ', 'low', v => v],
+  ['crime', 'פשיעה ביישוב, שינוי שנתי', 'low', v => (v > 0 ? '+' : '') + v.toFixed(1) + '%'],
+  ['kg', "גנים ב-500 מ'", 'high', v => v],
+  ['el', 'יסודיים בק"מ', 'high', v => v],
+  ['bus', "תחנות ב-400 מ'", 'high', v => v],
+  ['prec', 'דיוק מיקום', null, v => ({ house: 'בית', street: 'רחוב', city: 'יישוב בלבד', manual: 'ידני' }[v] || v)]
+];
+function renderCompare() {
+  screen = 'compare'; document.getElementById('btnBack').classList.remove('hidden');
+  const saved = store.get('saved', []);
+  let sel = saved.slice(0, Math.min(3, saved.length)).map(label);
+  const draw = () => {
+    app.innerHTML = `<section class="screen"><div class="addr"><div class="sub">כלים</div><h1 class="display">השוואת כתובות</h1><div class="prec">בוחרים 2 או 3 כתובות שמורות</div></div>
+    <div class="chips" style="margin-top:14px">${saved.map(a => `<button class="chip ${sel.includes(label(a)) ? 'on' : ''}" data-c="${esc(label(a))}">${esc(label(a))}</button>`).join('')}</div>
+    <button class="btn primary block" id="cGo" style="margin-top:16px" ${sel.length < 2 ? 'disabled' : ''}>השווה ${sel.length} כתובות</button>
+    <div id="cOut"></div></section>`;
+    app.querySelectorAll('[data-c]').forEach(b => b.onclick = () => {
+      const k = b.dataset.c;
+      if (sel.includes(k)) sel = sel.filter(x => x !== k); else if (sel.length < 3) sel.push(k); else { toast('עד 3 כתובות'); return; }
+      draw();
+    });
+    document.getElementById('cGo').onclick = run;
+  };
+  const run = async () => {
+    const out = document.getElementById('cOut'), btn = document.getElementById('cGo');
+    btn.disabled = true;
+    const list = sel.map(k => saved.find(a => label(a) === k)).filter(Boolean), Rs = [];
+    for (let i = 0; i < list.length; i++) {
+      out.innerHTML = `<div class="lrow card" style="margin-top:14px"><span class="st"><span class="spin"></span></span><span class="m">בודק ${i + 1} מתוך ${list.length}: ${esc(label(list[i]))}</span></div>`;
+      try { const R = await collect(list[i]); Rs.push(R); if (isSaved(R.addr)) { R.diff = null; saveSnap(R); } }
+      catch (e) { Rs.push(null); logErr('compare: ' + e.message); }
+    }
+    if (screen !== 'compare') return;
+    btn.disabled = false;
+    const M = Rs.map(R => R && metrics(R));
+    const best = (key, dir) => { if (!dir) return null; const v = M.map(m => m && m[key]).filter(x => x !== null && x !== undefined); if (v.length < 2) return null; const b = dir === 'high' ? Math.max(...v) : Math.min(...v); return v.filter(x => x === b).length === v.length ? null : b; };
+    out.innerHTML = `<div class="cmp-wrap"><table class="cmp"><thead><tr><th></th>${list.map((a, i) => `<th>${esc(a.street ? [a.street, a.num].filter(Boolean).join(' ') : a.city)}<span>${esc(a.city)}</span></th>`).join('')}</tr></thead><tbody>
+      ${CMP_ROWS.map(([k, t, dir, f]) => { const b = best(k, dir); return `<tr><th>${t}</th>${M.map(m => { const v = m ? m[k] : null; return `<td class="${v !== null && v !== undefined && v === b ? 'best' : ''}">${v === null || v === undefined ? '—' : `<bdi>${esc(f(v))}</bdi>`}</td>`; }).join('')}</tr>`; }).join('')}
+      </tbody></table></div>
+      <div class="foot">ירוק = הטוב מבין הכתובות בשורה. "—" = המקור לא ענה. הנתונים חושבו עכשיו, מאותם מקורות של הבדיקה הרגילה.</div>
+      <div class="chips">${list.map((a, i) => Rs[i] ? `<button class="chip" data-open="${i}">${icon('ext', 16)} דוח מלא: ${esc(label(a))}</button>` : '').join('')}</div>`;
+    out.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const R = Rs[+b.dataset.open]; pendingAddr = R.addr; R.diff = null; CURRENT = R; renderResult(); });
+  };
+  draw(); window.scrollTo(0, 0);
+}
+
+/* ---------- בדיקת קבלן ---------- */
+function renderKablan(pre) {
+  screen = 'kablan'; document.getElementById('btnBack').classList.remove('hidden');
+  app.innerHTML = `<section class="screen"><div class="addr"><div class="sub">כלים</div><h1 class="display">בדיקת קבלן</h1><div class="prec">קונים מקבלן או משפצים? בודקים שהוא רשום, ואם היו לו צווי בטיחות.</div></div>
+  <form class="card search" id="kForm" autocomplete="off"><div class="field"><label for="kName">שם הקבלן או החברה</label><input id="kName" placeholder="כמו שמופיע בחוזה" value="${esc(pre || '')}" enterkeyhint="search"></div>
+  <button class="btn primary block" type="submit">${icon('search', 20)} בדוק קבלן</button></form><div id="kOut"></div>
+  <div class="foot">מקורות: פנקס הקבלנים של רשם הקבלנים, וצווי בטיחות של משרד העבודה (data.gov.il). חיפוש לפי שם, ולכן ייתכנו התאמות לחברות עם שם דומה. לאימות סופי: מספר הקבלן ברשם הקבלנים.</div></section>`;
+  document.getElementById('kForm').onsubmit = async e => {
+    e.preventDefault();
+    const name = document.getElementById('kName').value.trim(), out = document.getElementById('kOut');
+    if (name.length < 2) { toast('מקלידים לפחות 2 אותיות'); return; }
+    out.innerHTML = `<div class="lrow card" style="margin-top:14px"><span class="st"><span class="spin"></span></span><span class="m">בודק…</span></div>`;
+    const r = await getContractor(name);
+    if (screen !== 'kablan') return;
+    const yearAgo = Date.now() - 3 * 365 * DAY, recent = r.orders.filter(x => x.t >= yearAgo);
+    const reg = r.regError ? { sev: 'info', ic: 'alert', title: 'לא הצלחנו לקרוא את פנקס הקבלנים', text: 'המאגר לא ענה או שהמבנה שלו השתנה. אפשר לנסות שוב מאוחר יותר.' }
+      : r.reg.length ? { sev: 'green', ic: 'check', title: r.reg.length === 1 ? 'רשום בפנקס הקבלנים' : `${r.reg.length} רשומות בפנקס הקבלנים`, text: r.reg.slice(0, 1).map(x => [x.name, x.anaf, x.sivug && 'סיווג ' + x.sivug, x.place].filter(Boolean).join(' · ')).join(''), more: r.reg.slice(1, 8).map(x => [x.name, x.anaf, x.sivug].filter(Boolean).join(' · ')) }
+      : { sev: 'yellow', ic: 'alert', title: 'לא נמצא בפנקס הקבלנים', text: 'בודקים שהשם מוקלד בדיוק כמו בחוזה. קבלן שבונה בלי רישום — סיבה לעצור ולברר.' };
+    const ord = r.ordersError ? { sev: 'info', ic: 'alert', title: 'מאגר צווי הבטיחות לא ענה', text: 'אפשר לנסות שוב מאוחר יותר.' }
+      : recent.length ? { sev: recent.length >= 3 ? 'red' : 'yellow', ic: 'hardhat', title: recent.length === 1 ? 'צו בטיחות אחד ב-3 השנים האחרונות' : `${recent.length} צווי בטיחות ב-3 השנים האחרונות`, text: 'צווים שהוציא משרד העבודה לאתרים של הקבלן בגלל ליקויי בטיחות.', more: recent.slice(0, 8).map(x => `${x.send_date} · ${x.work_name || ''}, ${x.city_name || ''} · ${x.felony_name || ''}`) }
+      : r.orders.length ? { sev: 'info', ic: 'hardhat', title: `${r.orders.length} צווי בטיחות, כולם לפני יותר מ-3 שנים`, text: `האחרון: ${r.orders[0].send_date}.` }
+      : { sev: 'green', ic: 'hardhat', title: 'לא נמצאו צווי בטיחות', text: 'במאגר משרד העבודה לא נמצא צו לאתר של קבלן בשם הזה.' };
+    out.innerHTML = '<div style="margin-top:14px"></div>' + [reg, ord].map(flagHtml).join('');
+  };
+  if (pre) document.getElementById('kForm').requestSubmit();
+  window.scrollTo(0, 0);
+}
+
 /* ---------- מקורות ותאריכים ---------- */
 function sourcesBlock(R) {
-  return `<div class="foot">מקורות: מינהל התכנון (תכניות מקוונות מ-2011), המשרד להגנת הסביבה (אנטנות, מפל"ס, ניטור אוויר), משטרת ישראל (תיקים לפי יישוב), משרד החינוך, משרד התחבורה, משרד האנרגיה, משרד העבודה (צווי בטיחות) — דרך data.gov.il. איתור כתובת: OpenStreetMap. נבדק ב-${new Date(R.at).toLocaleString('he-IL')}.<br>הנתונים מוצגים כפי שהם במקור ועשויים להיות חלקיים או לא מעודכנים. אינו ייעוץ משפטי, שמאי או הנדסי.</div>`;
+  return `<div class="foot">מקורות: מינהל התכנון (תכניות מקוונות מ-2011, ייעודי קרקע), הרשות להתחדשות עירונית, המשרד להגנת הסביבה (אנטנות, מפל"ס, ניטור אוויר), משטרת ישראל (תיקים לפי יישוב), משרד החינוך, משרד התחבורה, משרד האנרגיה, משרד העבודה (צווי בטיחות) — דרך data.gov.il. איתור כתובת: OpenStreetMap. נבדק ב-${new Date(R.at).toLocaleString('he-IL')}.<br>הנתונים מוצגים כפי שהם במקור ועשויים להיות חלקיים או לא מעודכנים. אינו ייעוץ משפטי, שמאי או הנדסי.</div>`;
 }
 
 /* ---------- שמירה ושיתוף ---------- */
 const isSaved = a => store.get('saved', []).some(x => label(x) === label(a));
-function toggleSave(a) { let s = store.get('saved', []); if (isSaved(a)) s = s.filter(x => label(x) !== label(a)); else s.unshift(a); store.set('saved', s.slice(0, 50)); toast(isSaved(a) ? 'הכתובת נשמרה' : 'הוסרה מהשמורות'); }
+function toggleSave(a) { let s = store.get('saved', []); if (isSaved(a)) s = s.filter(x => label(x) !== label(a)); else { s.unshift(a); if (CURRENT && label(CURRENT.addr) === label(a)) saveSnap(CURRENT); } store.set('saved', s.slice(0, 50)); toast(isSaved(a) ? 'הכתובת נשמרה' : 'הוסרה מהשמורות'); }
 async function shareResult() {
   const R = CURRENT, c = counts(R.findings), user = store.get('user', '');
   const text = `${label(R.addr)}: ${c.red} לבדוק, ${c.yellow} לשים לב, ${c.green} בסדר.${user ? ` (נשלח על ידי ${user})` : ''} נבדק במקום·AI`;
@@ -997,12 +1366,12 @@ function openSettings() {
   q('#sClose').onclick = () => m.remove();
 }
 function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
-function exportJSON() { download('makom-ai-backup.json', JSON.stringify({ app: 'מקום·AI', version: VERSION, user: store.get('user', ''), date: new Date().toISOString(), saved: store.get('saved', []), recent: store.get('recent', []), settings: { theme: store.get('theme', 'gold'), mode: store.get('mode', 'dark'), defaultView: store.get('defaultView', 'report') } }, null, 2), 'application/json'); }
+function exportJSON() { download('makom-ai-backup.json', JSON.stringify({ app: 'מקום·AI', version: VERSION, user: store.get('user', ''), date: new Date().toISOString(), saved: store.get('saved', []), recent: store.get('recent', []), snaps: store.get('snaps', {}), settings: { theme: store.get('theme', 'gold'), mode: store.get('mode', 'dark'), defaultView: store.get('defaultView', 'report') } }, null, 2), 'application/json'); }
 function exportCSV() { const rows = [['יישוב', 'רחוב', 'מספר'], ...store.get('saved', []).map(a => [a.city, a.street || '', a.num || ''])]; download('makom-ai-saved.csv', '﻿' + `# ${store.get('user', '')} · ${new Date().toLocaleDateString('he-IL')}\n` + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n'), 'text/csv'); }
 function importJSON(e) {
   const f = e.target.files[0]; if (!f) return;
   f.text().then(t => { const j = JSON.parse(t); if (!confirm('השחזור יחליף את הכתובות השמורות וההגדרות. להמשיך?')) return;
-    store.set('saved', j.saved || []); store.set('recent', j.recent || []); if (j.user) store.set('user', j.user);
+    store.set('saved', j.saved || []); store.set('recent', j.recent || []); if (j.snaps) store.set('snaps', j.snaps); if (j.user) store.set('user', j.user);
     if (j.settings) { store.set('theme', j.settings.theme || 'gold'); store.set('mode', j.settings.mode || 'dark'); store.set('defaultView', j.settings.defaultView || 'report'); }
     applyLook(); toast('הגיבוי שוחזר'); setScreen('home'); }).catch(() => toast('קובץ הגיבוי לא תקין'));
 }
@@ -1023,7 +1392,8 @@ const GUIDE = [
   ['search', 'בודקים', 'האפליקציה שואלת בבת אחת את מאגרי המדינה: תכנון, סביבה, משטרה, חינוך ותחבורה.'],
   ['list', 'שלוש תצוגות', 'דוח עם דגלים, מפה של מה שמסביב, או סיכום במילים. עוברים ביניהן בלחיצה.'],
   ['alert', 'אדום, צהוב, ירוק', 'אדום = לבדוק לפני שמתקדמים. צהוב = לשים לב. ירוק = בסדר. כל דגל מסביר למה.'],
-  ['check', 'לפני שחותמים', 'בסוף כל בדיקה יש רשימת בדיקות עם קישורים: נסח טאבו, מסמכי תכנית, עסקאות באזור.']
+  ['map', 'הסיכה לא במקום?', 'אם הכתובת לא אותרה בדיוק, עוברים למפה, לוחצים "הזזת סיכה" ומסמנים את הבית. הכל מחושב מחדש.'],
+  ['check', 'לפני שחותמים', 'בסוף כל בדיקה יש רשימת בדיקות עם קישורים. שומרים כתובות כדי להשוות ביניהן ולראות מה השתנה מאז.']
 ];
 function openGuide() {
   let i = 0;
@@ -1049,7 +1419,8 @@ document.getElementById('btnMode').onclick = () => { store.set('mode', store.get
 applyLook();
 (() => {
   const q = new URLSearchParams(location.search);
-  if (q.get('c') && q.get('city')) go({ city: q.get('city'), code: Number(q.get('c')), street: q.get('s') || '', num: q.get('n') || '' });
+  const ll = (q.get('ll') || '').split(',').map(Number);
+  if (q.get('c') && q.get('city')) go({ city: q.get('city'), code: Number(q.get('c')), street: q.get('s') || '', num: q.get('n') || '', ...(ll.length === 2 && ll.every(isFinite) && ll[0] > 29 && ll[0] < 34 ? { geo: { lat: ll[0], lon: ll[1] } } : {}) });
   else setScreen('home');
   if (!store.get('guideSeen', false)) setTimeout(openGuide, 400);
 })();
