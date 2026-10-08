@@ -1,23 +1,1015 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="he" dir="rtl" data-mode="dark" data-theme="gold">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>מקום·AI · בקרוב</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>מקום·AI · בדיקת בית ואזור לפי נתוני המדינה</title>
+<meta name="description" content="מה יש סביב הכתובת: תכניות בנייה, אנטנות וקרינה, מפעלים מזהמים, פשיעה, בתי ספר ותחבורה. מנתוני המדינה, בחינם.">
+<meta name="theme-color" content="#0B0B0D">
+<meta property="og:title" content="מקום·AI · בדיקת בית ואזור">
+<meta property="og:description" content="מה יש סביב הכתובת לפני שקונים או שוכרים. מנתוני המדינה, בחינם.">
+<meta property="og:image" content="icon-512.png">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-    background:#0B0B0D;color:#F2EFE6;font-family:"Segoe UI",Tahoma,Arial,sans-serif;text-align:center;padding:24px;box-sizing:border-box}
-  h1{margin:0 0 8px;font-size:40px}
-  h1 span{color:#D4AF37}
-  p{margin:0;color:#A7A39A;font-size:16px}
-  small{display:block;margin-top:32px;color:#6B675F;font-size:12px}
+/* ===================== מקום·AI · עיצוב =====================
+   ערכות צבע: 5 (משנות רק את צבע ההדגשה) × מצב יום/לילה.
+   ערך data-mode הוא בדיוק "dark" / "light" — לקח SkanNest (day≠light).    */
+:root{
+  --accent:#D4AF37; --accent-2:#E8C964; --on-accent:#0B0B0D;
+  --red:#F08A6E; --red-bg:#1A100E; --red-line:#5C2A22;
+  --yellow:#D4AF37; --yellow-bg:#15130D; --yellow-line:#4A4128;
+  --green:#6FCF97; --green-bg:#0E1712; --green-line:#234A35;
+  --blue:#7FB3F0;
+  --radius:16px;
+}
+[data-mode="dark"]{
+  --bg:#0B0B0D; --bg-2:#121215; --bg-3:#18181C; --line:#26262C; --line-2:#3A3528;
+  --text:#F2EFE6; --text-2:#C9C4B8; --muted:#A7A39A; --faint:#7D7A72;
+}
+[data-mode="light"]{
+  --bg:#F7F5EF; --bg-2:#FFFFFF; --bg-3:#EFECE3; --line:#E2DED2; --line-2:#D9CFAE;
+  --text:#1B1A17; --text-2:#3E3B34; --muted:#66625A; --faint:#8A867C;
+  --red:#B4432A; --red-bg:#FCEDE8; --red-line:#EAB9AA;
+  --yellow:#8A6A0C; --yellow-bg:#FBF4DD; --yellow-line:#E6D49A;
+  --green:#1F7A4B; --green-bg:#E7F5EC; --green-line:#A9D8BC;
+  --blue:#2F6DB5;
+}
+[data-theme="gold"]{--accent:#D4AF37;--accent-2:#E8C964;--on-accent:#0B0B0D}
+[data-theme="navy"]{--accent:#7FA7E8;--accent-2:#A9C4F0;--on-accent:#0B0B0D}
+[data-theme="emerald"]{--accent:#4FC08D;--accent-2:#7DD6AC;--on-accent:#0B0B0D}
+[data-theme="ruby"]{--accent:#E07A8A;--accent-2:#EDA3AF;--on-accent:#0B0B0D}
+[data-theme="silver"]{--accent:#C2C6CC;--accent-2:#DDE0E4;--on-accent:#0B0B0D}
+[data-mode="light"][data-theme="gold"]{--accent:#8A6A0C;--accent-2:#A8820F;--on-accent:#FFFFFF}
+[data-mode="light"][data-theme="navy"]{--accent:#2F5DA8;--accent-2:#3C6FC4;--on-accent:#FFFFFF}
+[data-mode="light"][data-theme="emerald"]{--accent:#1F7A4B;--accent-2:#278F59;--on-accent:#FFFFFF}
+[data-mode="light"][data-theme="ruby"]{--accent:#A93B4C;--accent-2:#C2495C;--on-accent:#FFFFFF}
+[data-mode="light"][data-theme="silver"]{--accent:#4D545C;--accent-2:#626A73;--on-accent:#FFFFFF}
+
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font-family:'Assistant',system-ui,sans-serif;font-size:16px;line-height:1.45;min-height:100vh;-webkit-tap-highlight-color:transparent}
+a{color:var(--accent)}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hidden{display:none!important}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px}
+.display{font-family:'Secular One','Assistant',sans-serif;font-weight:400}
+
+/* ---------- סרגל עליון ---------- */
+.topbar{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex;align-items:center;gap:10px;height:64px}
+.brand{font-family:'Secular One',sans-serif;font-size:22px;flex:1;cursor:default}
+.brand b{color:var(--accent);font-weight:400}
+.ibtn{width:44px;height:44px;border-radius:12px;border:1px solid var(--line-2);background:transparent;color:var(--accent);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 44px}
+.ibtn svg{width:20px;height:20px}
+.ibtn:active{transform:scale(.96)}
+
+/* ---------- מסכים ---------- */
+.screen{animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.screen{animation:none}}
+
+/* ---------- בית ---------- */
+.hero{padding:28px 0 8px}
+.hero h1{margin:0;font-size:34px;line-height:1.15}
+.hero p{margin:8px 0 0;color:var(--text-2);font-size:16px}
+.card{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius)}
+.search{padding:16px;margin-top:20px;display:flex;flex-direction:column;gap:12px}
+.field label{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:0 2px 6px}
+.field input{width:100%;height:52px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);font-size:17px;outline:none}
+.field input:focus{border-color:var(--accent)}
+.field input:disabled{opacity:.5}
+.row2{display:flex;gap:10px}
+.row2 .field{flex:1}
+.row2 .field.num{flex:0 0 110px}
+.hint{font-size:13px;color:var(--faint);margin:6px 2px 0}
+.btn{min-height:52px;padding:0 18px;border-radius:14px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-weight:800;font-size:17px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.block{width:100%}
+.btn.sm{min-height:44px;font-size:15px;padding:0 14px}
+.sec-title{font-size:13px;font-weight:800;color:var(--accent);letter-spacing:.3px;margin:26px 2px 10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:40px;padding:0 14px;border-radius:20px;border:1px solid var(--line);background:var(--bg-2);color:var(--text-2);font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip.on{border-color:var(--accent);color:var(--text);background:var(--bg-3)}
+.chip .dot{width:9px;height:9px;border-radius:5px}
+.what{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.what div{padding:14px;font-size:14px;color:var(--text-2)}
+.what b{display:block;color:var(--text);font-size:15px;margin-bottom:2px}
+
+/* ---------- טעינה ---------- */
+.loading{padding:40px 0;display:flex;flex-direction:column;gap:12px}
+.lrow{display:flex;align-items:center;gap:12px;padding:12px 14px;font-size:15px}
+.lrow .st{width:22px;height:22px;flex:0 0 22px;display:flex;align-items:center;justify-content:center}
+.spin{width:18px;height:18px;border:2.5px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.lrow.ok .st{color:var(--green)} .lrow.err .st{color:var(--red)}
+
+/* ---------- תוצאה: כותרת + מתג תצוגה ---------- */
+.addr{padding:20px 0 4px}
+.addr .sub{font-size:13px;color:var(--muted);font-weight:700}
+.addr h1{margin:4px 0 2px;font-size:32px;line-height:1.1}
+.addr .prec{font-size:13px;color:var(--text-2)}
+.prec.warn{color:var(--yellow)}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:var(--bg-2);border:1px solid var(--line);margin:14px 0 4px}
+.seg button{min-height:44px;border:none;border-radius:10px;background:transparent;color:var(--text-2);font-weight:700;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.seg svg{width:18px;height:18px}
+
+/* ---------- תצוגה א: דוח ---------- */
+.counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.count{border-radius:14px;padding:12px 10px;border:1px solid}
+.count .n{font-family:'Secular One',sans-serif;font-size:28px;line-height:1}
+.count .l{font-size:13px;font-weight:700;margin-top:4px}
+.c-red{border-color:var(--red-line);background:var(--red-bg)} .c-red .n{color:var(--red)}
+.c-yellow{border-color:var(--yellow-line);background:var(--yellow-bg)} .c-yellow .n{color:var(--yellow)}
+.c-green{border-color:var(--green-line);background:var(--green-bg)} .c-green .n{color:var(--green)}
+.flag{display:flex;gap:12px;padding:14px;border-radius:var(--radius);border:1px solid;margin-bottom:10px}
+.flag.red{border-color:var(--red-line);background:var(--red-bg)}
+.flag.yellow{border-color:var(--yellow-line);background:var(--yellow-bg)}
+.flag.green{border-color:var(--green-line);background:var(--green-bg)}
+.flag.info{border-color:var(--line);background:var(--bg-2)}
+.flag .ic{width:40px;height:40px;flex:0 0 40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.flag.red .ic{color:var(--red)} .flag.yellow .ic{color:var(--yellow)} .flag.green .ic{color:var(--green)} .flag.info .ic{color:var(--blue)}
+.flag .ic svg{width:22px;height:22px}
+.flag .t{font-weight:800;font-size:16px}
+.flag .x{font-size:15px;color:var(--text-2);margin-top:3px}
+.flag .more{margin:8px 0 0;padding:0;list-style:none;font-size:14px;color:var(--text-2)}
+.flag .more li{padding:6px 0;border-top:1px dashed var(--line)}
+.flag a.go{display:inline-block;margin-top:6px;font-weight:700;font-size:14px;text-decoration:none}
+.cat{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:10px;background:var(--bg-2)}
+.cat > button{width:100%;min-height:64px;display:flex;align-items:center;gap:12px;padding:12px 14px;background:transparent;border:none;text-align:right;cursor:pointer}
+.cat .sd{width:10px;height:10px;border-radius:5px;flex:0 0 10px}
+.cat .ct{flex:1;display:flex;flex-direction:column;gap:2px}
+.cat .ct b{font-size:16px}
+.cat .ct span{font-size:13px;color:var(--muted)}
+.cat .chev{color:var(--faint);transition:transform .15s}
+.cat.open .chev{transform:rotate(-90deg)}
+.cat .body{display:none;padding:0 12px 12px}
+.cat.open .body{display:block}
+.todo{display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:var(--bg-2);text-decoration:none;color:var(--text);margin-bottom:8px}
+.todo .box{width:24px;height:24px;border-radius:7px;border:2px solid var(--accent);flex:0 0 24px}
+.todo .tt{flex:1;display:flex;flex-direction:column}
+.todo .tt b{font-size:15px}
+.todo .tt span{font-size:13px;color:var(--muted)}
+.todo .tag{font-size:13px;color:var(--accent);font-weight:700}
+
+/* ---------- תצוגה ב: מפה ---------- */
+#map{height:420px;border-radius:var(--radius);border:1px solid var(--line);overflow:hidden;margin-top:14px;background:var(--bg-3);z-index:1}
+.leaflet-container{font-family:'Assistant',sans-serif}
+.near{border-top:1px solid var(--line)}
+.near > div{display:flex;gap:12px;padding:13px 2px;border-bottom:1px solid var(--line)}
+.near .sd{width:12px;height:12px;border-radius:6px;margin-top:6px;flex:0 0 12px}
+.near b{display:block;font-size:15px}
+.near span{font-size:14px;color:var(--text-2)}
+.near .d{margin-inline-start:auto;font-size:13px;color:var(--muted);white-space:nowrap;padding-top:2px}
+
+/* ---------- תצוגה ג: סיכום ---------- */
+.headline{font-family:'Secular One',sans-serif;font-size:26px;line-height:1.25;margin:16px 0 8px}
+.lede{font-size:16px;color:var(--text-2)}
+.group{border:1px solid;border-radius:18px;overflow:hidden;margin-top:14px}
+.group > .gh{padding:12px 16px;display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px;border-bottom:1px solid}
+.group > div.it{padding:12px 16px;font-size:15px;border-top:1px solid var(--line)}
+.group > div.it:first-of-type{border-top:none}
+.g-green{border-color:var(--green-line)} .g-green .gh{background:var(--green-bg);border-color:var(--green-line);color:var(--green)}
+.g-yellow{border-color:var(--yellow-line)} .g-yellow .gh{background:var(--yellow-bg);border-color:var(--yellow-line);color:var(--yellow)}
+.g-red{border-color:var(--red-line)} .g-red .gh{background:var(--red-bg);border-color:var(--red-line);color:var(--red)}
+.gh svg{width:20px;height:20px}
+
+/* ---------- כללי ---------- */
+.foot{font-size:12px;color:var(--faint);margin:28px 0 8px;line-height:1.6}
+.badge{display:block;text-align:center;font-size:12px;color:var(--faint);margin:10px 0 40px;text-decoration:none}
+.actions{display:flex;gap:10px;margin-top:20px}
+.actions .btn{flex:1}
+.list-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;min-height:56px}
+.list-item:last-child{border-bottom:none}
+.list-item .tt{flex:1}
+.list-item .tt b{display:block;font-size:15px}
+.list-item .tt span{font-size:13px;color:var(--muted)}
+.empty{padding:16px;color:var(--muted);font-size:14px}
+.err{padding:16px;border-radius:14px;border:1px solid var(--red-line);background:var(--red-bg);color:var(--text);margin-top:16px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:12px 18px;border-radius:12px;font-weight:700;z-index:999;max-width:90vw}
+
+/* ---------- חלונות ---------- */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;display:flex;align-items:flex-end;justify-content:center}
+.modal{background:var(--bg);width:100%;max-width:560px;max-height:90vh;overflow:auto;border-radius:22px 22px 0 0;border:1px solid var(--line);padding:18px 16px 28px}
+.modal h2{margin:4px 0 14px;font-family:'Secular One',sans-serif;font-weight:400;font-size:24px}
+.set-row{padding:14px 0;border-bottom:1px solid var(--line)}
+.set-row > label,.set-row > .lb{display:block;font-weight:800;margin-bottom:8px}
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{width:44px;height:44px;border-radius:12px;border:2px solid var(--line);cursor:pointer}
+.sw[aria-pressed="true"]{border-color:var(--text)}
+.guide-step{text-align:center;padding:12px 6px}
+.guide-step .gi{width:64px;height:64px;margin:0 auto 12px;border-radius:18px;background:var(--bg-2);border:1px solid var(--line-2);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.guide-step .gi svg{width:30px;height:30px}
+.dots{display:flex;gap:6px;justify-content:center;margin:12px 0}
+.dots span{width:8px;height:8px;border-radius:4px;background:var(--line)}
+.dots span.on{background:var(--accent);width:20px}
+
+/* ---------- הדפסה ---------- */
+@media print{
+  .topbar,.seg,.actions,.no-print,#map,.badge{display:none!important}
+  body{background:#fff;color:#000}
+  .cat .body{display:block!important}
+  .print-head{display:block!important}
+}
+.print-head{display:none;font-size:12px;margin:10px 0}
 </style>
 </head>
 <body>
-  <div>
-    <h1>מקום<span>·AI</span></h1>
-    <p>בדיקת בית ואזור לפי נתוני המדינה · בקרוב</p>
-    <small>AppNest · Barak Aflalo</small>
+
+<header class="topbar no-print">
+  <div class="wrap">
+    <button class="ibtn hidden" id="btnBack" aria-label="חזרה לדף הבית" data-icon="back"></button>
+    <div class="brand">מקום<b>·AI</b></div>
+    <button class="ibtn" id="btnMode" aria-label="מצב יום/לילה" data-icon="moon"></button>
+    <button class="ibtn" id="btnSettings" aria-label="הגדרות" data-icon="gear"></button>
   </div>
+</header>
+
+<main class="wrap" id="app"></main>
+
+<script>
+/* =====================================================================
+   מקום·AI  ·  גרסה 1.0.0  ·  AppNest · Barak Aflalo · © 2026
+   קובץ אחד. אין שרת: כל המקורות נענים ישירות מהדפדפן (אומת 8.10.2026
+   מתוך makom-ai.pages.dev). מקורות: data.gov.il (רישיון פתוח),
+   מינהל התכנון (iplan Xplan), OpenStreetMap Nominatim (איתור כתובת).
+   נתוני nadlan.gov.il לא בשימוש עד אישור בכתב ממפ"י (תנאי השימוש שלהם).
+   ===================================================================== */
+const VERSION = '1.0.0';
+
+/* ---------- יומן שגיאות (לקח StockAI) ---------- */
+const ERRLOG_KEY = 'makom_errlog';
+function logErr(msg, src, line) {
+  try {
+    const a = JSON.parse(localStorage.getItem(ERRLOG_KEY) || '[]');
+    a.unshift({ m: String(msg).slice(0, 300), s: src || '', l: line || '', t: new Date().toISOString() });
+    localStorage.setItem(ERRLOG_KEY, JSON.stringify(a.slice(0, 10)));
+  } catch (e) {}
+}
+window.addEventListener('error', e => logErr(e.message, e.filename, e.lineno));
+window.addEventListener('unhandledrejection', e => logErr(e.reason && (e.reason.message || e.reason)));
+
+/* ---------- אחסון (עטיפה עם נפילה לזיכרון) ---------- */
+const store = (() => {
+  const mem = {};
+  return {
+    get(k, d) { try { const v = localStorage.getItem('makom_' + k); return v === null ? d : JSON.parse(v); } catch (e) { return k in mem ? mem[k] : d; } },
+    set(k, v) { try { localStorage.setItem('makom_' + k, JSON.stringify(v)); return true; } catch (e) { mem[k] = v; toast('השמירה במכשיר נכשלה'); return false; } },
+    del(k) { try { localStorage.removeItem('makom_' + k); } catch (e) {} delete mem[k]; }
+  };
+})();
+
+/* ---------- אייקונים (קו, בלי אימוג'י) ---------- */
+const ICONS = {
+  back: '<path d="M9 6l6 6-6 6"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  plan: '<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/>',
+  antenna: '<path d="M12 13v8"/><circle cx="12" cy="11" r="2"/><path d="M8.5 7.5a5 5 0 0 0 0 7M15.5 7.5a5 5 0 0 1 0 7M5.6 4.6a9 9 0 0 0 0 12.8M18.4 4.6a9 9 0 0 1 0 12.8"/>',
+  factory: '<path d="M3 21V10l6 4V10l6 4V6h6v15z"/><path d="M7 17h2M12 17h2M17 17h2"/>',
+  shield: '<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>',
+  school: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
+  bus: '<rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16M8 21v-3M16 21v-3"/><circle cx="8" cy="14.5" r="1"/><circle cx="16" cy="14.5" r="1"/>',
+  fuel: '<path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h12M14 10h2a2 2 0 0 1 2 2v4a2 2 0 0 0 4 0V8l-3-3"/><path d="M7 8h4"/>',
+  air: '<path d="M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h8"/>',
+  hardhat: '<path d="M2 18h20M4 18v-3a8 8 0 0 1 16 0v3"/><path d="M10 7v5M14 7v5"/>',
+  check: '<path d="M5 12l5 5 9-10"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  map: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
+  text: '<path d="M4 6h16M4 12h10M4 18h13"/>',
+  chev: '<path d="M15 6l-6 6 6 6"/>',
+  ext: '<path d="M7 17L17 7M9 7h8v8"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>'
+};
+const icon = (n, s) => `<svg viewBox="0 0 24 24" ${s ? `width="${s}" height="${s}"` : ''} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtN = n => Number(n).toLocaleString('he-IL');
+const fmtM = m => m < 1000 ? `${Math.round(m / 10) * 10} מ'` : `${(m / 1000).toFixed(1)} ק"מ`;
+function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2600); }
+
+/* ---------- טעינת ספריות עם נפילה בין CDN-ים ---------- */
+function loadScript(urls) {
+  return new Promise((res, rej) => {
+    const tryAt = i => {
+      if (i >= urls.length) return rej(new Error('טעינת ספרייה נכשלה'));
+      const s = document.createElement('script'); s.src = urls[i]; s.onload = res; s.onerror = () => { s.remove(); tryAt(i + 1); };
+      document.head.appendChild(s);
+    };
+    tryAt(0);
+  });
+}
+function loadCss(urls) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = urls[0]; l.onerror = () => { if (urls[1]) l.href = urls[1]; }; document.head.appendChild(l); }
+let libsReady = null;
+function ensureLibs() {
+  if (!libsReady) {
+    loadCss(['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css']);
+    libsReady = Promise.all([
+      loadScript(['https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js', 'https://unpkg.com/proj4@2.11.0/dist/proj4.js']),
+      loadScript(['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js'])
+    ]).then(() => {
+      proj4.defs('EPSG:2039', '+proj=tmerc +lat_0=31.7343936111111 +lon_0=35.2045169444444 +k=1.0000067 +x_0=219529.584 +y_0=626907.39 +ellps=GRS80 +towgs84=-24.0024,-17.1032,-17.8444,-0.33077,-1.85269,1.66969,5.4262 +units=m +no_defs');
+    });
+  }
+  return libsReady;
+}
+const toITM = (lat, lon) => proj4('EPSG:4326', 'EPSG:2039', [lon, lat]);
+const toLL = (x, y) => { const r = proj4('EPSG:2039', 'EPSG:4326', [x, y]); return [r[1], r[0]]; };
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]); // מטרים, ברשת ישראל
+const validITM = (x, y) => isFinite(x) && isFinite(y) && x > 100000 && x < 300000 && y > 350000 && y < 820000;
+
+/* =====================================================================
+   שכבת נתונים
+   ===================================================================== */
+const CK = 'https://data.gov.il/api/3/action/datastore_search';
+const RID = {
+  cities: '55a24991-c3d3-4c5f-83bf-855db318d1b2',
+  streets: 'a7296d1a-f8c9-4b70-96c2-6ebb4352f8e3',
+  antennas: '8935c8e5-ec77-421f-af86-d970583195f8',
+  factories: '7ad8ddc7-87f4-45f9-84e4-d7f972662153',
+  schools: '5c5d6bb0-755d-470d-84b6-d7dd3135ba9c',
+  gas: '5537a0ef-3eeb-449c-90c8-51e27564f0cb',
+  air: '782cfb94-ebbd-4f41-aba2-80c298457a58',
+  bus: 'e873e6a2-66c1-494f-a677-f5e77348edb0',
+  safety: '264cec97-c8f8-496f-84e5-052a63fdea3f',
+  crime: [['2025', 'e311b6a1-be5a-4a82-8298-f3afbee07b6b'], ['2024', '5fc13c50-b6f3-4712-b831-a75e0f91a17e']]
+};
+const IPLAN = 'https://ags.iplan.gov.il/arcgisiplan/rest/services/PlanningPublic/Xplan/MapServer/identify';
+const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+const DAY = 864e5;
+
+/* מטמון: Cache API עם תוקף (cache-first, לקח Winner). כשל לעולם לא נשמר. */
+async function cachedJSON(url, ttl) {
+  let cache = null;
+  try { cache = await caches.open('makom-data-v1'); } catch (e) {}
+  if (cache) {
+    try {
+      const hit = await cache.match(url);
+      if (hit) {
+        const at = Number(hit.headers.get('x-at') || 0);
+        if (Date.now() - at < ttl) return await hit.json();
+      }
+    } catch (e) {}
+  }
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const txt = await r.text();
+  const j = JSON.parse(txt);
+  if (cache && j && j.success !== false) {
+    try { await cache.put(url, new Response(txt, { headers: { 'content-type': 'application/json', 'x-at': String(Date.now()) } })); } catch (e) {}
+  }
+  return j;
+}
+function ckUrl(rid, o = {}) {
+  const p = new URLSearchParams({ resource_id: rid, limit: String(o.limit ?? 100) });
+  if (o.fields) p.set('fields', o.fields.join(','));
+  if (o.filters) p.set('filters', JSON.stringify(o.filters));
+  if (o.q) p.set('q', o.q);
+  if (o.sort) p.set('sort', o.sort);
+  return CK + '?' + p.toString();
+}
+async function ck(rid, o, ttl = DAY) {
+  const j = await cachedJSON(ckUrl(rid, o), ttl);
+  if (!j || !j.result) throw new Error('תשובה לא תקינה');
+  return j.result;
+}
+const norm = s => String(s || '').replace(/[\s\-–־'"״׳()]/g, '').replace(/יי/g, 'י').replace(/וו/g, 'ו');
+
+/* ---------- יישובים ורחובות ---------- */
+let CITIES = null;
+async function loadCities() {
+  if (CITIES) return CITIES;
+  const r = await ck(RID.cities, { limit: 2000, fields: ['סמל_ישוב', 'שם_ישוב'] }, 30 * DAY);
+  const seen = new Set();
+  CITIES = r.records.map(x => ({ code: Number(x['סמל_ישוב']), name: String(x['שם_ישוב'] || '').trim().replace(/\)(.*?)\(/g, '($1)') }))
+    .filter(c => c.name && c.code && !/לא רשום/.test(c.name) && !seen.has(c.name) && seen.add(c.name))
+    .sort((a, b) => a.name.localeCompare(b.name, 'he'));
+  return CITIES;
+}
+async function loadStreets(code) {
+  const r = await ck(RID.streets, { limit: 5000, fields: ['שם_רחוב'], filters: { 'סמל_ישוב': code } }, 30 * DAY);
+  return [...new Set(r.records.map(x => String(x['שם_רחוב'] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he'));
+}
+
+/* ---------- איתור כתובת (Nominatim, עם בדיקת עיר — לקח: "הרצל 10 חיפה" חזר בחדרה) ---------- */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function nom(params) {
+  const p = new URLSearchParams({ format: 'json', countrycodes: 'il', addressdetails: '1', limit: '6', 'accept-language': 'he', ...params });
+  const r = await fetch(NOMINATIM + '?' + p.toString());
+  if (!r.ok) throw new Error('איתור הכתובת נכשל (' + r.status + ')');
+  return r.json();
+}
+function placeCity(a) { const ad = a.address || {}; return ad.city || ad.town || ad.village || ad.municipality || ad.suburb || ''; }
+function cityMatch(res, city) {
+  const c = norm(city);
+  return res.filter(a => { const pc = norm(placeCity(a)); return pc && (pc === c || pc.includes(c) || c.includes(pc) || norm(a.display_name).includes(c)); });
+}
+async function geocode(city, street, num) {
+  // 1) כתובת מלאה, מובנית
+  if (street) {
+    const r1 = cityMatch(await nom({ street: (num ? num + ' ' : '') + street, city }), city);
+    const exact = r1.find(a => num && a.address && String(a.address.house_number || '') === String(num));
+    if (exact) return { lat: +exact.lat, lon: +exact.lon, precision: 'house' };
+    const onStreet = r1.find(a => a.address && norm(a.address.road).includes(norm(street)));
+    if (onStreet) return { lat: +onStreet.lat, lon: +onStreet.lon, precision: num ? 'street' : 'street' };
+    await sleep(1100); // מדיניות Nominatim: בקשה אחת לשנייה
+    const r2 = cityMatch(await nom({ q: street + ', ' + city }), city);
+    if (r2[0]) return { lat: +r2[0].lat, lon: +r2[0].lon, precision: 'street' };
+    await sleep(1100);
+  }
+  // 2) מרכז היישוב
+  const r3 = cityMatch(await nom({ city }), city);
+  const pick = r3[0] || (await nom({ q: city }))[0];
+  if (pick) return { lat: +pick.lat, lon: +pick.lon, precision: 'city' };
+  throw new Error('לא הצלחנו לאתר את הכתובת על המפה');
+}
+
+/* ---------- שכבות ---------- */
+// אנטנות — כל הארץ, נשמר במטמון שבוע; מסננים לפי מרחק אמיתי מהבית
+const F_ANT = ['חברה', 'כתובת האתר', 'עיר', 'X_ITM', 'Y_ITM', 'סוג אתר', 'היתר קרינה', 'בדיקה תקופתית אחרונה', 'תוצאה מירבית ב% ביחס לסף הבריאות', 'טכנולוגיית שידור'];
+async function getAntennas(p) {
+  const r = await ck(RID.antennas, { limit: 12000, fields: F_ANT }, 7 * DAY);
+  return r.records.map(a => ({
+    co: a['חברה'], addr: a['כתובת האתר'], city: a['עיר'], type: a['סוג אתר'], permit: a['היתר קרינה'],
+    check: a['בדיקה תקופתית אחרונה'], pct: Number(a['תוצאה מירבית ב% ביחס לסף הבריאות']), tech: a['טכנולוגיית שידור'],
+    xy: [Number(a.X_ITM), Number(a.Y_ITM)]
+  })).filter(a => validITM(...a.xy)).map(a => ({ ...a, d: dist(p, a.xy) })).filter(a => a.d <= 1000).sort((a, b) => a.d - b.d);
+}
+const F_FAC = ['MisparAtarSvivati', 'ShemAtarSvivatiMenifa', 'ShemTaagidShutfut', 'AnafAtarSvivati', 'TchumPeilutAtarSvivati', 'SugPeilutAtarSvivati', 'YeshuvAtarSvivatiMenifa', 'NekudatTsiunXAtarSvivatiMenifa', 'NekudatTsiunYAtarSvivatiMenifa', 'ShnatDivuach', 'URL'];
+async function getFactories(p) {
+  const r = await ck(RID.factories, { limit: 12000, fields: F_FAC }, 7 * DAY);
+  const by = new Map();
+  for (const f of r.records) {
+    const xy = [Number(f.NekudatTsiunXAtarSvivatiMenifa), Number(f.NekudatTsiunYAtarSvivatiMenifa)];
+    if (!validITM(...xy)) continue;
+    const id = f.MisparAtarSvivati || (f.ShemAtarSvivatiMenifa + xy.join());
+    const prev = by.get(id);
+    if (!prev || Number(f.ShnatDivuach) > Number(prev.year)) by.set(id, {
+      name: f.ShemAtarSvivatiMenifa || f.ShemTaagidShutfut, owner: f.ShemTaagidShutfut, branch: f.AnafAtarSvivati,
+      field: f.TchumPeilutAtarSvivati, act: f.SugPeilutAtarSvivati, city: f.YeshuvAtarSvivatiMenifa, year: f.ShnatDivuach, url: f.URL, xy
+    });
+  }
+  return [...by.values()].map(f => ({ ...f, d: dist(p, f.xy) })).filter(f => f.d <= 5000).sort((a, b) => a.d - b.d);
+}
+async function getSchools(p) {
+  const r = await ck(RID.schools, { limit: 32000, fields: ['SEMEL_MOSAD', 'SHEM_MOSAD', 'ITM_X', 'ITM_Y'] }, 30 * DAY);
+  return r.records.map(s => ({ id: s.SEMEL_MOSAD, name: String(s.SHEM_MOSAD || '').trim(), xy: [Number(s.ITM_X), Number(s.ITM_Y)] }))
+    .filter(s => validITM(...s.xy)).map(s => ({ ...s, kg: /^(גן|מעון|פעוטון)[\s\-"'״]/.test(s.name + ' '), d: dist(p, s.xy) }))
+    .filter(s => s.d <= 1500).sort((a, b) => a.d - b.d);
+}
+async function getGas(p) {
+  const r = await ck(RID.gas, { limit: 2000, fields: ['שם_תחנה', 'חברה', 'כתובת', 'X', 'Y'] }, 7 * DAY);
+  return r.records.map(g => ({ name: g['שם_תחנה'], co: g['חברה'], addr: g['כתובת'], xy: [Number(g.X), Number(g.Y)] }))
+    .filter(g => validITM(...g.xy)).map(g => ({ ...g, d: dist(p, g.xy) })).filter(g => g.d <= 1500).sort((a, b) => a.d - b.d);
+}
+async function getAir(p) {
+  const r = await ck(RID.air, { limit: 500 }, 30 * DAY);
+  return r.records.map(a => ({ name: a['שם התחנה החדש'] || a['שם התחנה הישן'], city: a['ישוב'], body: a['הגוף המנטר'], polls: a['מזהמי אוויר'], area: a['סיווג אזור'], xy: [Number(a.X), Number(a.Y)] }))
+    .filter(a => validITM(...a.xy)).map(a => ({ ...a, d: dist(p, a.xy) })).sort((a, b) => a.d - b.d).slice(0, 3);
+}
+async function getBus(p, code) {
+  const r = await ck(RID.bus, { limit: 8000, fields: ['StationId', 'Lat', 'Long', 'StationTypeName'], filters: { CityCode: code } }, 7 * DAY);
+  return r.records.filter(b => isFinite(b.Lat) && isFinite(b.Long) && b.Lat > 29).map(b => {
+    const xy = toITM(Number(b.Lat), Number(b.Long)); return { id: b.StationId, type: b.StationTypeName, xy, d: dist(p, xy) };
+  }).filter(b => b.d <= 800).sort((a, b) => a.d - b.d);
+}
+async function getSafety(city, street) {
+  const r = await ck(RID.safety, { limit: 400, q: city, sort: '_id desc', fields: ['send_date', 'work_name', 'city_name', 'executor_name', 'category_name', 'felony_name'] }, DAY);
+  const c = norm(city), yearAgo = Date.now() - 365 * DAY;
+  const parseD = s => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s || ''); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0; };
+  const rows = r.records.filter(x => norm(x.city_name) === c || norm(x.city_name).includes(c)).map(x => ({ ...x, t: parseD(x.send_date) }));
+  const recent = rows.filter(x => x.t >= yearAgo).sort((a, b) => b.t - a.t);
+  const onStreet = street ? recent.filter(x => norm(x.work_name).includes(norm(street))) : [];
+  return { recent, onStreet };
+}
+async function getCrime(code) {
+  const [[y1, rid1], [y0, rid0]] = RID.crime;
+  const cur = await ck(rid1, { limit: 32000, fields: ['StatisticGroup', 'StatisticArea', 'Quarter'], filters: { YeshuvKod: code } }, 7 * DAY);
+  const prev = await ck(rid0, { limit: 0, filters: { YeshuvKod: code } }, 30 * DAY);
+  const quarters = new Set(cur.records.map(r => r.Quarter));
+  const groups = {}, areas = {};
+  for (const r of cur.records) {
+    groups[r.StatisticGroup || 'אחר'] = (groups[r.StatisticGroup || 'אחר'] || 0) + 1;
+    if (r.StatisticArea) areas[r.StatisticArea] = (areas[r.StatisticArea] || 0) + 1;
+  }
+  return { year: y1, prevYear: y0, total: cur.total, prevTotal: prev.total, quarters: [...quarters].sort(), groups: Object.entries(groups).sort((a, b) => b[1] - a[1]), areas: Object.entries(areas).sort((a, b) => b[1] - a[1]) };
+}
+async function getPlans(lat, lon) {
+  const d = 0.004;
+  const p = new URLSearchParams({ f: 'json', geometry: lon + ',' + lat, geometryType: 'esriGeometryPoint', sr: '4326', tolerance: '2', mapExtent: [lon - d, lat - d, lon + d, lat + d].join(','), imageDisplay: '800,600,96', layers: 'all:1', returnGeometry: 'false' });
+  const j = await cachedJSON(IPLAN + '?' + p.toString(), 3 * DAY);
+  const seen = new Set(), out = [];
+  for (const r of (j.results || [])) {
+    const a = r.attributes || {};
+    const id = a['מזהה תכנית ראשי'];
+    const name = a['שם תכנית'];
+    if (!name || name === 'Null' || seen.has(id)) continue;
+    seen.add(id);
+    const status = a['תיאור סטטוס'] || '';
+    const stage = a['שלב תכנוני רצוי'] || '';
+    const goal = String(a['מטרות'] || '').split('^')[1] || '';
+    out.push({
+      id, name: name.trim(), num: a['מספר תכנית'], type: a['תת-סוג תכנית'], status, stage,
+      approved: /אישור/.test(status) && /אושרה|פרסום אישור/.test(stage),
+      dunam: Number(a['שטח תכנית רשום בדונם'] || 0),
+      units: Number(a["שינוי מס' יח' דיור "] || a["שינוי מס' יח' דיור"] || 0),
+      goal: goal.replace(/\s+/g, ' ').trim(),
+      updated: a['תאריך עדכון אחרון'], published: a['תאריך פרסום ברשומות'],
+      link: a['קישור לאתר מידע תכנוני']
+    });
+  }
+  return out;
+}
+
+/* ---------- תאריך מ-M/D/YYYY (פורמט של iplan) ---------- */
+function usDate(s) { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s || ''); return m ? `${m[2].padStart(2, '0')}/${m[1].padStart(2, '0')}/${m[3]}` : (s || ''); }
+function yearOf(s) { const m = /(\d{4})/.exec(s || ''); return m ? Number(m[1]) : 0; }
+
+/* =====================================================================
+   ניתוח: כל שכבה הופכת לממצא אחד או יותר, במשפט ברור.
+   חומרה: red = לבדוק · yellow = לשים לב · green = בסדר · info = מידע
+   הכללים כאן, גלויים — כדי שיהיה ברור איך הגענו לכל דגל (לקח LexCalendar).
+   ===================================================================== */
+const CATS = {
+  plan: { t: 'תכנון ובנייה', ic: 'plan' }, env: { t: 'סביבה ובריאות', ic: 'factory' },
+  safe: { t: 'ביטחון אישי', ic: 'shield' }, edu: { t: 'חינוך', ic: 'school' },
+  move: { t: 'תחבורה', ic: 'bus' }, build: { t: 'בטיחות בנייה', ic: 'hardhat' }
+};
+function analyze(R) {
+  const F = [];
+  const add = f => F.push(f);
+  const has = k => R[k] && !R[k].error;
+
+  // ---- תכנון ----
+  if (has('plans')) {
+    const local = R.plans.filter(p => p.dunam > 0 && p.dunam <= 500);
+    const wide = R.plans.filter(p => !(p.dunam > 0 && p.dunam <= 500));
+    const localPending = local.filter(p => !p.approved);
+    const widePending = wide.filter(p => !p.approved);
+    for (const p of localPending) add({ cat: 'plan', sev: 'red', ic: 'plan', title: 'תכנית בנייה בתהליך, חלה ממש כאן',
+      text: `${p.name}. סטטוס: ${p.status || 'לא צוין'}.${p.units ? ` משנה ${fmtN(p.units)} יחידות דיור.` : ''}${p.goal ? ' ' + p.goal.slice(0, 160) : ''}`,
+      link: p.link && { href: p.link, label: 'מסמכי התכנית במינהל התכנון' } });
+    for (const p of local.filter(p => p.approved)) add({ cat: 'plan', sev: 'info', ic: 'plan', title: 'תכנית מאושרת שחלה על המקום',
+      text: `${p.name}${p.published ? ` · פורסמה ${usDate(p.published)}` : ''}.${p.goal ? ' ' + p.goal.slice(0, 140) : ''}`, link: p.link && { href: p.link, label: 'פרטי התכנית' } });
+    for (const p of widePending) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: 'תכנית כלל-עירונית בתהליך',
+      text: `${p.name}. סטטוס: ${p.status || 'לא צוין'}.${p.units ? ` כוללת שינוי של ${fmtN(p.units)} יחידות דיור בעיר.` : ''}`, link: p.link && { href: p.link, label: 'פרטי התכנית' } });
+    if (!R.plans.length) add({ cat: 'plan', sev: 'green', ic: 'plan', title: 'אין תכניות מקוונות בנקודה', text: 'במאגר המקוון של מינהל התכנון (תכניות מ-2011 ואילך) לא נמצאה תכנית החלה על הנקודה. תכניות ישנות יותר לא מופיעות כאן.' });
+    else if (!local.length && !widePending.length) add({ cat: 'plan', sev: 'green', ic: 'plan', title: 'רק תכניות כלל-עירוניות מאושרות', text: `${R.plans.length} תכניות מאושרות חלות על כל העיר (למשל ${R.plans[0].name}). לא נמצאה תכנית מקומית בתהליך.` });
+  }
+
+  // ---- אנטנות ----
+  if (has('antennas')) {
+    const A = R.antennas, near100 = A.filter(a => a.d <= 100), in300 = A.filter(a => a.d <= 300), in500 = A.filter(a => a.d <= 500);
+    const noPermit = in300.filter(a => a.permit && !/יש היתר/.test(a.permit));
+    const n = A[0];
+    const maxPct = in500.reduce((m, a) => Math.max(m, isFinite(a.pct) ? a.pct : 0), 0);
+    const oldest = in500.map(a => yearOf(a.check)).filter(Boolean).sort()[0];
+    const base = n ? `הקרובה: ${n.co || ''}, ${n.addr || ''} (${fmtM(n.d)}).${isFinite(n.pct) && n.pct > 0 ? ` בבדיקה האחרונה (${n.check || 'ללא תאריך'}) נמדדו ${n.pct}% מסף הבריאות.` : ''}` : '';
+    if (noPermit.length) add({ cat: 'env', sev: 'red', ic: 'antenna', title: `${noPermit.length} אנטנות בלי היתר קרינה בטווח 300 מ'`, text: base, markers: 'antennas' });
+    else if (near100.length) add({ cat: 'env', sev: 'yellow', ic: 'antenna', title: `אנטנה במרחק ${fmtM(near100[0].d)} מהבית`, text: base + (oldest && oldest < new Date().getFullYear() - 3 ? ` חלק מהבדיקות הרשמיות ישנות (${oldest}).` : ''), markers: 'antennas' });
+    else if (in500.length) add({ cat: 'env', sev: 'green', ic: 'antenna', title: `${in500.length} אנטנות ברדיוס 500 מ'`, text: base + (maxPct ? ` הערך הגבוה ביותר שנמדד ביניהן: ${maxPct}% מהסף.` : ''), markers: 'antennas' });
+    else add({ cat: 'env', sev: 'green', ic: 'antenna', title: "אין אנטנות ברדיוס 500 מ'", text: A.length ? `הקרובה במרחק ${fmtM(A[0].d)}.` : 'לא נמצאו אנטנות בקילומטר הקרוב.' });
+  }
+
+  // ---- מפעלים ----
+  if (has('factories')) {
+    const P = R.factories, in1 = P.filter(f => f.d <= 1000), in3 = P.filter(f => f.d <= 3000);
+    const desc = f => `${f.name}${f.field ? ` (${f.field})` : ''}, ${fmtM(f.d)}`;
+    if (in1.length) add({ cat: 'env', sev: 'red', ic: 'factory', title: `${in1.length} מפעלים המדווחים על פליטות בטווח 1 ק"מ`, text: in1.slice(0, 3).map(desc).join(' · ') + '.', markers: 'factories' });
+    else if (in3.length) add({ cat: 'env', sev: 'yellow', ic: 'factory', title: `${in3.length} מפעלים מדווחים בטווח 3 ק"מ`, text: 'הקרוב: ' + desc(in3[0]) + '.', markers: 'factories' });
+    else add({ cat: 'env', sev: 'green', ic: 'factory', title: 'אין מפעלים מדווחים בטווח 3 ק"מ', text: P.length ? `הקרוב: ${desc(P[0])}.` : 'לא נמצא מפעל מדווח (מפל"ס) בטווח 5 ק"מ.' });
+  }
+
+  // ---- תחנת ניטור אוויר ----
+  if (has('air') && R.air.length) {
+    const a = R.air[0];
+    add({ cat: 'env', sev: 'info', ic: 'air', title: 'תחנת ניטור אוויר קרובה', text: `${a.name}${a.city ? ', ' + a.city : ''} · ${fmtM(a.d)}.${a.polls ? ' מודדת: ' + String(a.polls).slice(0, 80) + '.' : ''}`, link: { href: 'https://air.sviva.gov.il/', label: 'איכות האוויר עכשיו' } });
+  }
+
+  // ---- דלק ----
+  if (has('gas') && R.gas.length && R.gas[0].d <= 150) {
+    const g = R.gas[0];
+    add({ cat: 'env', sev: 'yellow', ic: 'fuel', title: `תחנת דלק במרחק ${fmtM(g.d)}`, text: `${g.co || ''} ${g.name || ''}${g.addr ? ', ' + g.addr : ''}. קרבה לתחנת דלק עלולה להשפיע על ריח, רעש ותנועה.`, markers: 'gas' });
+  }
+
+  // ---- פשיעה ----
+  if (has('crime') && R.crime.total) {
+    const c = R.crime, partial = c.quarters.length < 4;
+    const top = c.groups.slice(0, 3).map(([g, n]) => `${g} (${fmtN(n)})`).join(', ');
+    let sev = 'info', title = `${fmtN(c.total)} תיקים נפתחו ב-${c.year}`;
+    let text = `ביישוב כולו. הנפוצים: ${top}.`;
+    if (!partial && c.prevTotal) {
+      const ch = (c.total - c.prevTotal) / c.prevTotal * 100;
+      title += `, ${ch < 0 ? 'ירידה' : 'עלייה'} של ${Math.abs(ch).toFixed(1)}%`;
+      sev = ch <= -3 ? 'green' : ch >= 5 ? 'yellow' : 'info';
+      text += ` ב-${c.prevYear} נפתחו ${fmtN(c.prevTotal)}.`;
+    } else if (partial) text += ` נתוני ${c.year} חלקיים (${c.quarters.join(', ')}).`;
+    text += ' זה מספר כולל ליישוב, לא לפי תושב.';
+    add({ cat: 'safe', sev, ic: 'shield', title, text, more: c.areas.slice(0, 6).map(([a, n]) => `${a}: ${fmtN(n)} תיקים`), moreTitle: 'לפי אזור סטטיסטי' });
+  }
+
+  // ---- בטיחות בנייה ----
+  if (has('safety')) {
+    const s = R.safety;
+    if (s.onStreet.length) add({ cat: 'build', sev: 'red', ic: 'hardhat', title: `צו בטיחות לאתר בנייה ברחוב ${R.addr.street}`, text: s.onStreet.slice(0, 2).map(x => `${x.work_name} · ${x.executor_name || ''} · ${x.felony_name || ''} (${x.send_date})`).join(' | ') });
+    if (s.recent.length) add({ cat: 'build', sev: 'info', ic: 'hardhat', title: `${s.recent.length} צווי בטיחות לאתרי בנייה ביישוב בשנה האחרונה`, text: 'צווים שהוציא משרד העבודה לאתרים עם ליקויי בטיחות. שימושי לבדיקת קבלן לפני שקונים מקבלן.', more: s.recent.slice(0, 6).map(x => `${x.send_date} · ${x.work_name} · ${x.executor_name || ''}`), moreTitle: 'האחרונים' });
+  }
+
+  // ---- חינוך ----
+  if (has('schools')) {
+    const S = R.schools, kg = S.filter(s => s.kg && s.d <= 500), sch = S.filter(s => !s.kg && s.d <= 1000);
+    const ns = S.find(s => !s.kg), nk = S.find(s => s.kg);
+    add({ cat: 'edu', sev: sch.length || kg.length ? 'green' : 'yellow', ic: 'school',
+      title: `${sch.length} בתי ספר בק"מ, ${kg.length} גנים ומעונות ב-500 מ'`,
+      text: [ns && `בית הספר הקרוב: ${ns.name} (${fmtM(ns.d)})`, nk && `הגן הקרוב: ${nk.name} (${fmtM(nk.d)})`].filter(Boolean).join('. ') + '.', markers: 'schools' });
+  }
+
+  // ---- תחבורה ----
+  if (has('bus')) {
+    const B = R.bus, in400 = B.filter(b => b.d <= 400);
+    add({ cat: 'move', sev: in400.length >= 3 ? 'green' : in400.length ? 'info' : 'yellow', ic: 'bus',
+      title: in400.length ? `${in400.length} תחנות תחבורה ציבורית ב-400 מ'` : "אין תחנת תחבורה ציבורית ב-400 מ'",
+      text: B.length ? `הקרובה במרחק ${fmtM(B[0].d)}.` : 'לא נמצאה תחנה ביישוב בטווח 800 מ\'.', markers: 'bus' });
+  }
+  return F;
+}
+
+/* =====================================================================
+   הרצת בדיקה
+   ===================================================================== */
+const STEPS = [
+  ['plans', 'תכניות בנייה (מינהל התכנון)'], ['antennas', 'אנטנות ומדידות קרינה'], ['factories', 'מפעלים מזהמים (מפל"ס)'],
+  ['crime', 'נתוני משטרה'], ['schools', 'מוסדות חינוך'], ['bus', 'תחבורה ציבורית'], ['air', 'תחנות ניטור אוויר'],
+  ['gas', 'תחנות דלק'], ['safety', 'צווי בטיחות באתרי בנייה']
+];
+let CURRENT = null;
+async function runCheck(addr) {
+  setScreen('loading');
+  const box = document.getElementById('lsteps');
+  const mark = (k, ok, msg) => { const el = document.getElementById('ls-' + k); if (!el) return; el.className = 'lrow card ' + (ok ? 'ok' : 'err'); el.querySelector('.st').innerHTML = icon(ok ? 'check' : 'x', 18); if (msg) el.querySelector('.m').textContent = msg; };
+  box.innerHTML = `<div class="lrow card" id="ls-geo"><span class="st"><span class="spin"></span></span><span class="m">מאתר את הכתובת על המפה</span></div>` +
+    STEPS.map(([k, t]) => `<div class="lrow card" id="ls-${k}"><span class="st"><span class="spin"></span></span><span class="m">${t}</span></div>`).join('');
+  let geo;
+  try { await ensureLibs(); geo = await geocode(addr.city, addr.street, addr.num); mark('geo', true); }
+  catch (e) { mark('geo', false, 'איתור הכתובת נכשל: ' + e.message); showError('לא הצלחנו לאתר את הכתובת. בדוק את שם הרחוב ונסה שוב.'); return; }
+  const p = toITM(geo.lat, geo.lon);
+  const R = { addr, geo, p, at: new Date().toISOString() };
+  const jobs = {
+    plans: () => getPlans(geo.lat, geo.lon), antennas: () => getAntennas(p), factories: () => getFactories(p),
+    crime: () => getCrime(addr.code), schools: () => getSchools(p), bus: () => getBus(p, addr.code),
+    air: () => getAir(p), gas: () => getGas(p), safety: () => getSafety(addr.city, addr.street)
+  };
+  await Promise.all(Object.entries(jobs).map(async ([k, fn]) => {
+    try { R[k] = await fn(); mark(k, true); }
+    catch (e) { R[k] = { error: e.message }; logErr(k + ': ' + e.message); mark(k, false, STEPS.find(s => s[0] === k)[1] + ' · לא זמין כרגע'); }
+  }));
+  R.findings = analyze(R);
+  CURRENT = R;
+  addRecent(addr);
+  renderResult();
+}
+
+/* =====================================================================
+   ממשק
+   ===================================================================== */
+const app = document.getElementById('app');
+let screen = 'home';
+function setScreen(s) {
+  screen = s;
+  document.getElementById('btnBack').classList.toggle('hidden', s === 'home');
+  if (s === 'home') renderHome();
+  if (s === 'loading') { app.innerHTML = `<section class="screen loading"><div class="addr"><div class="sub">בודק</div><h1 class="display">${esc(CUR_ADDR_LABEL())}</h1></div><div id="lsteps" style="display:flex;flex-direction:column;gap:8px"></div></section>`; }
+  window.scrollTo(0, 0);
+}
+let pendingAddr = null;
+const CUR_ADDR_LABEL = () => pendingAddr ? [pendingAddr.street, pendingAddr.num].filter(Boolean).join(' ') + (pendingAddr.street ? ', ' : '') + pendingAddr.city : '';
+function showError(msg) { app.insertAdjacentHTML('beforeend', `<div class="err">${esc(msg)}</div><div class="actions"><button class="btn primary" onclick="setScreen('home')">חזרה לחיפוש</button></div>`); }
+
+/* ---------- בית ---------- */
+function renderHome() {
+  const recent = store.get('recent', []), saved = store.get('saved', []);
+  app.innerHTML = `<section class="screen">
+  <div class="hero">
+    <h1 class="display">מה יש סביב הכתובת?</h1>
+    <p>תכניות בנייה, אנטנות וקרינה, מפעלים מזהמים, פשיעה, בתי ספר ותחבורה. ממאגרי המדינה, לפני שקונים או שוכרים.</p>
+  </div>
+  <form class="card search" id="fSearch" autocomplete="off">
+    <div class="field"><label for="iCity">יישוב</label><input id="iCity" list="dlCity" placeholder="מתחילים להקליד…" enterkeyhint="next"><datalist id="dlCity"></datalist></div>
+    <div class="row2">
+      <div class="field"><label for="iStreet">רחוב</label><input id="iStreet" list="dlStreet" placeholder="קודם בוחרים יישוב" disabled enterkeyhint="next"><datalist id="dlStreet"></datalist></div>
+      <div class="field num"><label for="iNum">מס' בית</label><input id="iNum" inputmode="numeric" placeholder="לא חובה" enterkeyhint="search"></div>
+    </div>
+    <div class="hint" id="hCity">טוען רשימת יישובים…</div>
+    <button class="btn primary block" id="bGo" type="submit" disabled>${icon('search', 20)} בדוק כתובת</button>
+  </form>
+  ${saved.length ? `<div class="sec-title">כתובות שמורות</div><div class="card">${saved.map((a, i) => `<div class="list-item" role="button" tabindex="0" data-saved="${i}"><span style="color:var(--accent)">${icon('pin', 20)}</span><div class="tt"><b>${esc(label(a))}</b></div></div>`).join('')}</div>` : ''}
+  ${recent.length ? `<div class="sec-title">חיפושים אחרונים</div><div class="chips">${recent.map((a, i) => `<button class="chip" data-recent="${i}">${esc(label(a))}</button>`).join('')}</div>` : ''}
+  <div class="sec-title">מה נבדק</div>
+  <div class="what">
+    <div class="card"><b>תכניות בנייה</b>מה מתוכנן לקום ליד הבית, מאושר או בתהליך</div>
+    <div class="card"><b>אנטנות וקרינה</b>מרחק ומדידת הקרינה הרשמית</div>
+    <div class="card"><b>מפעלים מזהמים</b>מפעלים שמדווחים על פליטות</div>
+    <div class="card"><b>פשיעה</b>תיקי משטרה ביישוב ומגמה</div>
+    <div class="card"><b>חינוך ותחבורה</b>גנים, בתי ספר ותחנות קרובות</div>
+    <div class="card"><b>בטיחות בנייה</b>צווי בטיחות לאתרי בנייה</div>
+  </div>
+  <div class="foot">כל הנתונים ממאגרים פתוחים של המדינה ומוצגים כפי שהם. זה לא ייעוץ משפטי, שמאי או הנדסי. לפני עסקה מאמתים מול הגורם המוסמך.</div>
+  <a class="badge" href="https://appnest-store.pages.dev" target="_blank" rel="noopener">AppNest · Barak Aflalo · גרסה ${VERSION}</a>
+</section>`;
+  app.querySelectorAll('[data-recent]').forEach(b => b.onclick = () => go(recent[+b.dataset.recent]));
+  app.querySelectorAll('[data-saved]').forEach(b => { b.onclick = () => go(saved[+b.dataset.saved]); b.onkeydown = e => { if (e.key === 'Enter') b.click(); }; });
+  initSearch();
+}
+const label = a => [a.street, a.num].filter(Boolean).join(' ') + (a.street ? ', ' : '') + a.city;
+async function initSearch() {
+  const iCity = document.getElementById('iCity'), iStreet = document.getElementById('iStreet'), iNum = document.getElementById('iNum');
+  const hint = document.getElementById('hCity'), bGo = document.getElementById('bGo');
+  let city = null;
+  try {
+    const list = await loadCities();
+    document.getElementById('dlCity').innerHTML = list.map(c => `<option value="${esc(c.name)}">`).join('');
+    hint.textContent = 'בוחרים יישוב מהרשימה, ואז רחוב. מספר בית משפר את הדיוק.';
+  } catch (e) { hint.textContent = 'טעינת רשימת היישובים נכשלה. בדוק חיבור ונסה שוב.'; return; }
+  const pickCity = async () => {
+    const v = iCity.value.trim();
+    const c = CITIES.find(x => x.name === v) || CITIES.find(x => norm(x.name) === norm(v));
+    if (!c) { city = null; iStreet.disabled = true; bGo.disabled = true; return; }
+    if (city && city.code === c.code) return;
+    city = c; iCity.value = c.name; bGo.disabled = false;
+    iStreet.disabled = false; iStreet.value = ''; iStreet.placeholder = 'טוען רחובות…';
+    try {
+      const st = await loadStreets(c.code);
+      document.getElementById('dlStreet').innerHTML = st.map(s => `<option value="${esc(s)}">`).join('');
+      iStreet.placeholder = st.length ? 'מתחילים להקליד…' : 'אין רשימת רחובות ליישוב';
+    } catch (e) { iStreet.placeholder = 'אפשר להקליד ידנית'; }
+  };
+  iCity.addEventListener('change', pickCity); iCity.addEventListener('input', () => { if (CITIES.some(x => x.name === iCity.value.trim())) pickCity(); });
+  document.getElementById('fSearch').onsubmit = e => {
+    e.preventDefault();
+    if (!city) { toast('בוחרים יישוב מהרשימה'); return; }
+    go({ city: city.name, code: city.code, street: iStreet.value.trim(), num: iNum.value.replace(/\D/g, '') });
+  };
+}
+function go(a) { pendingAddr = a; try { history.replaceState(null, '', '?' + new URLSearchParams({ c: a.code, city: a.city, s: a.street || '', n: a.num || '' })); } catch (e) {} runCheck(a); }
+function addRecent(a) { const r = store.get('recent', []).filter(x => label(x) !== label(a)); r.unshift(a); store.set('recent', r.slice(0, 8)); }
+
+/* ---------- תוצאה ---------- */
+const VIEWS = [['report', 'דוח', 'list'], ['map', 'מפה', 'map'], ['summary', 'סיכום', 'text']];
+function renderResult() {
+  const R = CURRENT, v = store.get('view', store.get('defaultView', 'report'));
+  const prec = { house: 'מיקום מדויק לפי מספר הבית', street: 'מיקום לפי הרחוב (מספר הבית לא אותר במפה)', city: 'מיקום לפי מרכז היישוב בלבד. המרחקים משוערים.' }[R.geo.precision];
+  screen = 'result'; document.getElementById('btnBack').classList.remove('hidden');
+  app.innerHTML = `<section class="screen">
+  <div class="print-head">${esc(store.get('user', ''))} · ${new Date().toLocaleDateString('he-IL')} · מקום·AI</div>
+  <div class="addr"><div class="sub">${esc(R.addr.city)}</div><h1 class="display">${esc(R.addr.street ? [R.addr.street, R.addr.num].filter(Boolean).join(' ') : R.addr.city)}</h1>
+  <div class="prec ${R.geo.precision === 'city' ? 'warn' : ''}">${prec}</div></div>
+  <div class="seg" role="group" aria-label="סוג תצוגה">${VIEWS.map(([k, t, ic]) => `<button aria-pressed="${k === v}" data-view="${k}">${icon(ic)}${t}</button>`).join('')}</div>
+  <div id="view"></div>
+  <div class="actions no-print">
+    <button class="btn" id="bSave">${isSaved(R.addr) ? 'שמורה' : 'שמור כתובת'}</button>
+    <button class="btn" id="bShare">שתף</button>
+    <button class="btn" id="bPrint">PDF</button>
+  </div>
+  ${sourcesBlock(R)}
+  <a class="badge" href="https://appnest-store.pages.dev" target="_blank" rel="noopener">AppNest · Barak Aflalo · גרסה ${VERSION}</a>
+</section>`;
+  app.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { store.set('view', b.dataset.view); app.querySelectorAll('[data-view]').forEach(x => x.setAttribute('aria-pressed', x === b)); drawView(b.dataset.view); });
+  document.getElementById('bSave').onclick = e => { toggleSave(R.addr); e.target.textContent = isSaved(R.addr) ? 'שמורה' : 'שמור כתובת'; };
+  document.getElementById('bShare').onclick = shareResult;
+  document.getElementById('bPrint').onclick = () => { drawView('report'); setTimeout(() => window.print(), 300); };
+  drawView(v);
+}
+function drawView(v) {
+  const el = document.getElementById('view');
+  if (mapObj) { try { mapObj.remove(); } catch (e) {} mapObj = null; }
+  if (v === 'map') el.innerHTML = viewMap(); else if (v === 'summary') el.innerHTML = viewSummary(); else el.innerHTML = viewReport();
+  el.querySelectorAll('.cat > button').forEach(b => b.onclick = () => { b.parentElement.classList.toggle('open'); b.setAttribute('aria-expanded', b.parentElement.classList.contains('open')); });
+  if (v === 'map') setTimeout(drawMap, 30);
+}
+const SEV_ORDER = { red: 0, yellow: 1, info: 2, green: 3 };
+const sevColor = s => ({ red: 'var(--red)', yellow: 'var(--yellow)', green: 'var(--green)', info: 'var(--blue)' }[s]);
+function flagHtml(f) {
+  return `<div class="flag ${f.sev}"><div class="ic">${icon(f.ic)}</div><div style="min-width:0;flex:1"><div class="t">${esc(f.title)}</div><div class="x">${esc(f.text)}</div>
+  ${f.more && f.more.length ? `<ul class="more">${f.more.map(m => `<li>${esc(m)}</li>`).join('')}</ul>` : ''}
+  ${f.link ? `<a class="go" href="${esc(f.link.href)}" target="_blank" rel="noopener">${esc(f.link.label)} ↗</a>` : ''}</div></div>`;
+}
+function counts(F) { return { red: F.filter(f => f.sev === 'red').length, yellow: F.filter(f => f.sev === 'yellow').length, green: F.filter(f => f.sev === 'green').length }; }
+function failed() { return STEPS.filter(([k]) => CURRENT[k] && CURRENT[k].error).map(s => s[1]); }
+
+/* --- א · דוח --- */
+function viewReport() {
+  const F = CURRENT.findings, c = counts(F), flags = F.filter(f => f.sev === 'red' || f.sev === 'yellow').sort((a, b) => SEV_ORDER[a.sev] - SEV_ORDER[b.sev]);
+  const cats = Object.keys(CATS).map(k => ({ k, ...CATS[k], items: F.filter(f => f.cat === k) })).filter(x => x.items.length);
+  const fl = failed();
+  return `<div class="counts"><div class="count c-red"><div class="n">${c.red}</div><div class="l">לבדוק</div></div>
+    <div class="count c-yellow"><div class="n">${c.yellow}</div><div class="l">לשים לב</div></div>
+    <div class="count c-green"><div class="n">${c.green}</div><div class="l">בסדר</div></div></div>
+  ${fl.length ? `<div class="flag info" style="margin-top:12px"><div class="ic">${icon('alert')}</div><div><div class="t">חלק מהמקורות לא ענו</div><div class="x">${esc(fl.join(', '))}. אפשר לנסות שוב מאוחר יותר.</div></div></div>` : ''}
+  ${flags.length ? `<div class="sec-title">דגלים לבדיקה</div>${flags.map(flagHtml).join('')}` : `<div class="sec-title">דגלים לבדיקה</div><div class="flag green"><div class="ic">${icon('check')}</div><div><div class="t">לא נמצאו דגלים</div><div class="x">בכל המקורות שנבדקו לא עלה משהו שמחייב בדיקה נוספת.</div></div></div>`}
+  <div class="sec-title">כל הנושאים</div>
+  ${cats.map(x => { const worst = x.items.slice().sort((a, b) => SEV_ORDER[a.sev] - SEV_ORDER[b.sev])[0];
+    return `<div class="cat"><button aria-expanded="false"><span class="sd" style="background:${sevColor(worst.sev)}"></span><span class="ct"><b>${x.t}</b><span>${esc(worst.title)}</span></span><span class="chev">${icon('chev', 18)}</span></button><div class="body">${x.items.map(flagHtml).join('')}</div></div>`; }).join('')}
+  ${checklist()}`;
+}
+function checklist() {
+  const a = CURRENT.addr;
+  const plan = (CURRENT.plans && !CURRENT.plans.error) ? CURRENT.plans.find(p => !p.approved && p.link) : null;
+  return `<div class="sec-title">לבדוק בעצמך לפני שחותמים</div>
+  <a class="todo" href="https://www.govmap.gov.il/?q=${encodeURIComponent(label(a))}" target="_blank" rel="noopener"><span class="box"></span><span class="tt"><b>גוש וחלקה של הנכס</b><span>מחפשים את הכתובת ב-govmap ולוחצים על הבניין</span></span><span class="tag">חינם</span></a>
+  <a class="todo" href="https://mekarkein-online.justice.gov.il/voucher/main" target="_blank" rel="noopener"><span class="box"></span><span class="tt"><b>נסח טאבו</b><span>בעלות, משכנתאות, עיקולים והערות אזהרה</span></span><span class="tag">₪15</span></a>
+  ${plan ? `<a class="todo" href="${esc(plan.link)}" target="_blank" rel="noopener"><span class="box"></span><span class="tt"><b>מסמכי התכנית שבתהליך</b><span>${esc(plan.name)}</span></span><span class="tag">חינם</span></a>` : ''}
+  <a class="todo" href="https://www.nadlan.gov.il/" target="_blank" rel="noopener"><span class="box"></span><span class="tt"><b>מחירי עסקאות באזור</b><span>באתר הנדל"ן הממשלתי, מחפשים את הכתובת</span></span><span class="tag">חינם</span></a>
+  <div class="todo"><span class="box"></span><span class="tt"><b>תיק בניין והיתרים</b><span>במחלקת ההנדסה של ${esc(a.city)}: היתר, חריגות בנייה, צווי הריסה</span></span></div>`;
+}
+
+/* --- ב · מפה --- */
+let mapObj = null;
+const LAYERS = [
+  ['antennas', 'אנטנות', '#E08A3C', a => `${a.co || ''} · ${a.addr || ''}<br>${a.permit || ''}${isFinite(a.pct) && a.pct > 0 ? ` · ${a.pct}% מהסף` : ''}${a.check ? `<br>בדיקה: ${a.check}` : ''}`, 500],
+  ['factories', 'מפעלים', '#F08A6E', f => `${f.name}<br>${f.field || f.branch || ''}`, 3000],
+  ['schools', 'גנים ובתי ספר', '#6FCF97', s => s.name, 1000],
+  ['bus', 'תחנות', '#7FB3F0', b => 'תחנה ' + b.id + (b.type ? ' · ' + b.type : ''), 500],
+  ['gas', 'דלק', '#C9A227', g => `${g.co || ''} ${g.name || ''}`, 1500],
+  ['air', 'ניטור אוויר', '#B48CF0', a => a.name, 99999]
+];
+function viewMap() {
+  const R = CURRENT, on = store.get('mapLayers', null);
+  const near = [];
+  for (const [k, t, col, , r] of LAYERS) {
+    const arr = R[k] && !R[k].error ? R[k] : [];
+    if (arr[0] && arr[0].d <= r) near.push({ k, t, col, it: arr[0], n: arr.filter(x => x.d <= r).length, r });
+  }
+  near.sort((a, b) => a.it.d - b.it.d);
+  return `<div id="map" role="img" aria-label="מפת הסביבה"></div>
+  <div class="chips" style="margin-top:12px">${LAYERS.map(([k, t, col]) => { const n = R[k] && !R[k].error ? R[k].length : 0; return n ? `<button class="chip ${!on || on.includes(k) ? 'on' : ''}" data-layer="${k}"><span class="dot" style="background:${col}"></span>${t} (${n})</button>` : ''; }).join('')}</div>
+  <div class="sec-title">הכי קרוב לבית</div>
+  <div class="near">${near.map(x => `<div><span class="sd" style="background:${x.col}"></span><div><b>${x.t}</b><span>${esc(nearText(x))}</span></div><span class="d">${fmtM(x.it.d)}</span></div>`).join('') || '<div class="empty">לא נמצאו פריטים קרובים</div>'}</div>
+  ${(R.plans && !R.plans.error && R.plans.length) ? `<div class="sec-title">תכניות שחלות על הנקודה</div>${R.findings.filter(f => f.cat === 'plan').map(flagHtml).join('')}` : ''}`;
+}
+function nearText(x) {
+  const it = x.it;
+  if (x.k === 'antennas') return `${it.co || ''}, ${it.addr || ''} · ${x.n} ב-${fmtM(x.r)}`;
+  if (x.k === 'factories') return `${it.name} · ${x.n} ב-${fmtM(x.r)}`;
+  if (x.k === 'schools') return `${it.name} · ${x.n} ב-${fmtM(x.r)}`;
+  if (x.k === 'bus') return `${x.n} תחנות ב-${fmtM(x.r)}`;
+  if (x.k === 'gas') return `${it.co || ''} ${it.name || ''}`;
+  if (x.k === 'air') return `${it.name}${it.city ? ', ' + it.city : ''}`;
+  return '';
+}
+function drawMap() {
+  const R = CURRENT; if (!window.L || !document.getElementById('map')) return;
+  const dark = document.documentElement.dataset.mode === 'dark';
+  mapObj = L.map('map', { zoomControl: true, attributionControl: true }).setView([R.geo.lat, R.geo.lon], 16);
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap © CARTO' }).addTo(mapObj);
+  L.circle([R.geo.lat, R.geo.lon], { radius: 500, color: '#D4AF37', weight: 1, dashArray: '4 6', fillOpacity: .04 }).addTo(mapObj);
+  L.circleMarker([R.geo.lat, R.geo.lon], { radius: 10, color: '#0B0B0D', weight: 3, fillColor: '#D4AF37', fillOpacity: 1 }).addTo(mapObj).bindPopup('הכתובת שנבדקה');
+  const on = store.get('mapLayers', null), groups = {};
+  for (const [k, , col, pop] of LAYERS) {
+    const arr = R[k] && !R[k].error ? R[k] : []; if (!arr.length) continue;
+    const g = L.layerGroup();
+    arr.slice(0, 300).forEach(it => { const ll = toLL(it.xy[0], it.xy[1]); L.circleMarker(ll, { radius: 7, color: '#0B0B0D', weight: 2, fillColor: col, fillOpacity: .9 }).bindPopup(`<div dir="rtl" style="font-family:Assistant,sans-serif">${pop(it)}<br><b>${fmtM(it.d)}</b></div>`).addTo(g); });
+    groups[k] = g; if (!on || on.includes(k)) g.addTo(mapObj);
+  }
+  app.querySelectorAll('[data-layer]').forEach(b => b.onclick = () => {
+    const k = b.dataset.layer, g = groups[k]; if (!g) return;
+    const isOn = b.classList.toggle('on'); isOn ? g.addTo(mapObj) : mapObj.removeLayer(g);
+    store.set('mapLayers', [...app.querySelectorAll('[data-layer].on')].map(x => x.dataset.layer));
+  });
+}
+
+/* --- ג · סיכום --- */
+function viewSummary() {
+  const F = CURRENT.findings;
+  const good = F.filter(f => f.sev === 'green'), warn = F.filter(f => f.sev === 'yellow'), bad = F.filter(f => f.sev === 'red');
+  const head = bad.length ? `${bad.length === 1 ? 'יש דבר אחד' : `יש ${bad.length} דברים`} שכדאי לבדוק לפני שמתקדמים.`
+    : warn.length ? `נראה בסדר, עם ${warn.length === 1 ? 'נקודה אחת' : warn.length + ' נקודות'} לשים לב אליהן.` : 'לא עלה שום דגל במקורות שנבדקו.';
+  const lede = bad.length ? 'הכי חשוב: ' + bad.map(f => f.title).join('; ') + '.' : good.length ? 'בין הדברים הטובים: ' + good.slice(0, 2).map(f => f.title).join('; ') + '.' : '';
+  const grp = (cls, ic, t, arr) => arr.length ? `<div class="group ${cls}"><div class="gh">${icon(ic)}${t}</div>${arr.map(f => `<div class="it"><b>${esc(f.title)}.</b> ${esc(f.text)}${f.link ? ` <a href="${esc(f.link.href)}" target="_blank" rel="noopener">${esc(f.link.label)}</a>` : ''}</div>`).join('')}</div>` : '';
+  return `<div class="headline">${esc(head)}</div><div class="lede">${esc(lede)}</div>
+  ${grp('g-red', 'alert', 'לבדוק', bad)}${grp('g-yellow', 'alert', 'לשים לב', warn)}${grp('g-green', 'check', 'נראה טוב', good)}
+  ${grp('g-yellow', 'list', 'מידע נוסף', F.filter(f => f.sev === 'info'))}
+  ${checklist()}`;
+}
+
+/* ---------- מקורות ותאריכים ---------- */
+function sourcesBlock(R) {
+  return `<div class="foot">מקורות: מינהל התכנון (תכניות מקוונות מ-2011), המשרד להגנת הסביבה (אנטנות, מפל"ס, ניטור אוויר), משטרת ישראל (תיקים לפי יישוב), משרד החינוך, משרד התחבורה, משרד האנרגיה, משרד העבודה (צווי בטיחות) — דרך data.gov.il. איתור כתובת: OpenStreetMap. נבדק ב-${new Date(R.at).toLocaleString('he-IL')}.<br>הנתונים מוצגים כפי שהם במקור ועשויים להיות חלקיים או לא מעודכנים. אינו ייעוץ משפטי, שמאי או הנדסי.</div>`;
+}
+
+/* ---------- שמירה ושיתוף ---------- */
+const isSaved = a => store.get('saved', []).some(x => label(x) === label(a));
+function toggleSave(a) { let s = store.get('saved', []); if (isSaved(a)) s = s.filter(x => label(x) !== label(a)); else s.unshift(a); store.set('saved', s.slice(0, 50)); toast(isSaved(a) ? 'הכתובת נשמרה' : 'הוסרה מהשמורות'); }
+async function shareResult() {
+  const R = CURRENT, c = counts(R.findings), user = store.get('user', '');
+  const text = `${label(R.addr)}: ${c.red} לבדוק, ${c.yellow} לשים לב, ${c.green} בסדר.${user ? ` (נשלח על ידי ${user})` : ''} נבדק במקום·AI`;
+  const url = location.href;
+  if (navigator.share) { try { await navigator.share({ title: 'מקום·AI', text, url }); } catch (e) {} }
+  else { try { await navigator.clipboard.writeText(text + ' ' + url); toast('הקישור הועתק'); } catch (e) { toast('לא הצלחנו להעתיק'); } }
+}
+
+/* =====================================================================
+   הגדרות, אודות, מדריך
+   ===================================================================== */
+const THEMES = [['gold', 'זהב', '#D4AF37'], ['navy', 'כחול', '#7FA7E8'], ['emerald', 'ירוק', '#4FC08D'], ['ruby', 'אודם', '#E07A8A'], ['silver', 'כסף', '#C2C6CC']];
+function applyLook() {
+  const mode = store.get('mode', 'dark'), theme = store.get('theme', 'gold');
+  document.documentElement.dataset.mode = mode; document.documentElement.dataset.theme = theme;
+  document.querySelector('meta[name=theme-color]').content = mode === 'dark' ? '#0B0B0D' : '#F7F5EF';
+  const bm = document.getElementById('btnMode'); bm.innerHTML = icon(mode === 'dark' ? 'sun' : 'moon'); bm.setAttribute('aria-label', mode === 'dark' ? 'מעבר למצב יום' : 'מעבר למצב לילה');
+}
+function modal(html) {
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  document.addEventListener('keydown', function k(e) { if (e.key === 'Escape') { bg.remove(); document.removeEventListener('keydown', k); } });
+  document.body.appendChild(bg); return bg;
+}
+function openSettings() {
+  const theme = store.get('theme', 'gold'), dv = store.get('defaultView', 'report');
+  const m = modal(`<h2>הגדרות</h2>
+  <div class="set-row"><label for="sUser">שם משתמש</label><div class="field"><input id="sUser" value="${esc(store.get('user', ''))}" placeholder="יופיע בשיתוף ובייצוא"></div></div>
+  <div class="set-row"><div class="lb">ערכת צבע</div><div class="swatches">${THEMES.map(([k, t, c]) => `<button class="sw" style="background:${c}" aria-label="${t}" aria-pressed="${k === theme}" data-theme="${k}"></button>`).join('')}</div></div>
+  <div class="set-row"><div class="lb">תצוגה שנפתחת כברירת מחדל</div><div class="chips">${VIEWS.map(([k, t]) => `<button class="chip ${k === dv ? 'on' : ''}" data-dv="${k}">${t}</button>`).join('')}</div></div>
+  <div class="set-row"><div class="lb">גיבוי</div><div class="chips"><button class="chip" id="sExpJ">ייצוא JSON</button><button class="chip" id="sExpC">ייצוא CSV</button><label class="chip" for="sImp" style="cursor:pointer">ייבוא גיבוי</label><input type="file" id="sImp" accept="application/json" class="hidden"></div></div>
+  <div class="set-row"><div class="lb">עוד</div><div class="chips"><button class="chip" id="sGuide">מדריך</button><button class="chip" id="sAbout">אודות</button><a class="chip" href="privacy_policy.html" target="_blank">מדיניות פרטיות</a><button class="chip" id="sClear" style="color:var(--red)">מחיקת כל הנתונים</button></div></div>
+  <button class="btn primary block" id="sClose" style="margin-top:18px">סגור</button>`);
+  const q = s => m.querySelector(s);
+  q('#sUser').oninput = e => store.set('user', e.target.value.trim());
+  m.querySelectorAll('[data-theme]').forEach(b => b.onclick = () => { store.set('theme', b.dataset.theme); applyLook(); m.querySelectorAll('[data-theme]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  m.querySelectorAll('[data-dv]').forEach(b => b.onclick = () => { store.set('defaultView', b.dataset.dv); store.del('view'); m.querySelectorAll('[data-dv]').forEach(x => x.classList.toggle('on', x === b)); });
+  q('#sExpJ').onclick = exportJSON; q('#sExpC').onclick = exportCSV; q('#sImp').onchange = importJSON;
+  q('#sGuide').onclick = () => { m.remove(); openGuide(); }; q('#sAbout').onclick = () => { m.remove(); openAbout(); };
+  q('#sClear').onclick = () => { if (confirm('למחוק את כל הכתובות השמורות, ההיסטוריה וההגדרות?') && confirm('בטוח? אי אפשר לבטל.')) { Object.keys(localStorage).filter(k => k.startsWith('makom_')).forEach(k => localStorage.removeItem(k)); caches && caches.delete('makom-data-v1'); location.reload(); } };
+  q('#sClose').onclick = () => m.remove();
+}
+function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+function exportJSON() { download('makom-ai-backup.json', JSON.stringify({ app: 'מקום·AI', version: VERSION, user: store.get('user', ''), date: new Date().toISOString(), saved: store.get('saved', []), recent: store.get('recent', []), settings: { theme: store.get('theme', 'gold'), mode: store.get('mode', 'dark'), defaultView: store.get('defaultView', 'report') } }, null, 2), 'application/json'); }
+function exportCSV() { const rows = [['יישוב', 'רחוב', 'מספר'], ...store.get('saved', []).map(a => [a.city, a.street || '', a.num || ''])]; download('makom-ai-saved.csv', '﻿' + `# ${store.get('user', '')} · ${new Date().toLocaleDateString('he-IL')}\n` + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n'), 'text/csv'); }
+function importJSON(e) {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => { const j = JSON.parse(t); if (!confirm('השחזור יחליף את הכתובות השמורות וההגדרות. להמשיך?')) return;
+    store.set('saved', j.saved || []); store.set('recent', j.recent || []); if (j.user) store.set('user', j.user);
+    if (j.settings) { store.set('theme', j.settings.theme || 'gold'); store.set('mode', j.settings.mode || 'dark'); store.set('defaultView', j.settings.defaultView || 'report'); }
+    applyLook(); toast('הגיבוי שוחזר'); setScreen('home'); }).catch(() => toast('קובץ הגיבוי לא תקין'));
+}
+function openAbout() {
+  let errs = []; try { errs = JSON.parse(localStorage.getItem(ERRLOG_KEY) || '[]'); } catch (e) {}
+  const m = modal(`<h2>אודות מקום·AI</h2>
+  <p style="color:var(--text-2)">בדיקת בית ואזור לפי נתוני המדינה: מה מתוכנן לקום ליד הכתובת, אנטנות ומדידות קרינה, מפעלים מזהמים, פשיעה, חינוך ותחבורה.</p>
+  <div class="card" style="padding:14px;font-size:14px;line-height:1.9">גרסה ${VERSION}<br>פותח על ידי Barak Aflalo<br>פלטפורמה: PWA · HTML5<br>אחסון: על המכשיר בלבד<br>© AppNest 2026</div>
+  <p style="font-size:14px;color:var(--text-2)">הנתונים נשאבים ממאגרים פתוחים של המדינה ומוצגים כפי שהם. הם עשויים להיות חלקיים או לא מעודכנים. האפליקציה אינה ייעוץ משפטי, שמאי או הנדסי, ולפני כל עסקה יש לאמת מול הגורם המוסמך.</p>
+  <div class="chips"><a class="chip" href="https://appnest-store.pages.dev" target="_blank" rel="noopener">חנות AppNest</a><button class="chip" id="aShare">שתף את האפליקציה</button><a class="chip" href="mailto:appnest55@gmail.com?subject=${encodeURIComponent('משוב על מקום·AI')}">שלח משוב</a><a class="chip" href="privacy_policy.html" target="_blank">מדיניות פרטיות</a></div>
+  <details style="margin-top:16px"><summary style="cursor:pointer;color:var(--muted)">דוח אבחון</summary><pre style="white-space:pre-wrap;font-size:12px;color:var(--muted)">גרסה ${VERSION} · ${esc(navigator.userAgent)}\n${errs.length ? errs.map(e => `${e.t} · ${esc(e.m)}`).join('\n') : 'אין שגיאות רשומות'}</pre></details>
+  <button class="btn primary block" id="aClose" style="margin-top:18px">סגור</button>`);
+  m.querySelector('#aClose').onclick = () => m.remove();
+  m.querySelector('#aShare').onclick = async () => { const u = location.origin + location.pathname; if (navigator.share) { try { await navigator.share({ title: 'מקום·AI', text: 'בדיקת בית ואזור לפי נתוני המדינה', url: u }); } catch (e) {} } else { try { await navigator.clipboard.writeText(u); toast('הקישור הועתק'); } catch (e) {} } };
+}
+const GUIDE = [
+  ['pin', 'בוחרים כתובת', 'מתחילים להקליד יישוב ובוחרים מהרשימה, אחר כך רחוב. מספר בית לא חובה, אבל משפר את הדיוק.'],
+  ['search', 'בודקים', 'האפליקציה שואלת בבת אחת את מאגרי המדינה: תכנון, סביבה, משטרה, חינוך ותחבורה.'],
+  ['list', 'שלוש תצוגות', 'דוח עם דגלים, מפה של מה שמסביב, או סיכום במילים. עוברים ביניהן בלחיצה.'],
+  ['alert', 'אדום, צהוב, ירוק', 'אדום = לבדוק לפני שמתקדמים. צהוב = לשים לב. ירוק = בסדר. כל דגל מסביר למה.'],
+  ['check', 'לפני שחותמים', 'בסוף כל בדיקה יש רשימת בדיקות עם קישורים: נסח טאבו, מסמכי תכנית, עסקאות באזור.']
+];
+function openGuide() {
+  let i = 0;
+  const m = modal('<div id="gBody"></div>');
+  const draw = () => {
+    const [ic, t, x] = GUIDE[i];
+    m.querySelector('#gBody').innerHTML = `<div class="guide-step"><div class="gi">${icon(ic)}</div><h2>${t}</h2><p style="color:var(--text-2)">${x}</p></div>
+    <div class="dots">${GUIDE.map((_, j) => `<span class="${j === i ? 'on' : ''}"></span>`).join('')}</div>
+    <div class="actions"><button class="btn" id="gSkip">${i === GUIDE.length - 1 ? 'סגור' : 'דלג'}</button><button class="btn primary" id="gNext">${i === GUIDE.length - 1 ? 'מתחילים' : 'הבא'}</button></div>`;
+    m.querySelector('#gSkip').onclick = done; m.querySelector('#gNext').onclick = () => { if (i < GUIDE.length - 1) { i++; draw(); } else done(); };
+  };
+  const done = () => { store.set('guideSeen', true); m.remove(); };
+  draw();
+}
+
+/* =====================================================================
+   אתחול
+   ===================================================================== */
+document.querySelectorAll('[data-icon]').forEach(b => b.innerHTML = icon(b.dataset.icon));
+document.getElementById('btnBack').onclick = () => { history.replaceState(null, '', location.pathname); setScreen('home'); };
+document.getElementById('btnSettings').onclick = openSettings;
+document.getElementById('btnMode').onclick = () => { store.set('mode', store.get('mode', 'dark') === 'dark' ? 'light' : 'dark'); applyLook(); if (screen === 'result' && document.getElementById('map')) drawView('map'); };
+applyLook();
+(() => {
+  const q = new URLSearchParams(location.search);
+  if (q.get('c') && q.get('city')) go({ city: q.get('city'), code: Number(q.get('c')), street: q.get('s') || '', num: q.get('n') || '' });
+  else setScreen('home');
+  if (!store.get('guideSeen', false)) setTimeout(openGuide, 400);
+})();
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(e => logErr('sw: ' + e.message));
+if (location.protocol === 'file:') setTimeout(() => toast('נפתח מקובץ מקומי: חלק מהיכולות לא יעבדו. פתחו מ-makom-ai.pages.dev'), 800);
+</script>
 </body>
 </html>
