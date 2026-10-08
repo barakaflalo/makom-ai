@@ -272,7 +272,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
    מינהל התכנון (iplan Xplan), OpenStreetMap Nominatim (איתור כתובת).
    נתוני nadlan.gov.il לא בשימוש עד אישור בכתב ממפ"י (תנאי השימוש שלהם).
    ===================================================================== */
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 
 /* ---------- יומן שגיאות (לקח StockAI) ---------- */
 const ERRLOG_KEY = 'makom_errlog';
@@ -577,7 +577,7 @@ async function getBus(p, code) {
 }
 /* צווי בטיחות: סינון מדויק לפי שם העיר (filters), לא חיפוש טקסט + limit —
    בבדיקה, q+limit החזיר רשומות בלי תאריך ופספס את כל השנה האחרונה. רק קטגוריית "בנייה". */
-async function getSafety(city, street) {
+async function getSafety(city, street, num) {
   const F = ['send_date', 'work_name', 'city_name', 'executor_name', 'category_name', 'felony_name'];
   let r = await ck(RID.safety, { limit: 5000, fields: F, filters: { city_name: city } }, DAY);
   const c = norm(city);
@@ -586,7 +586,19 @@ async function getSafety(city, street) {
   const parseD = s => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s || ''); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0; };
   const rows = r.records.filter(x => /בני/.test(x.category_name || '')).map(x => ({ ...x, t: parseD(x.send_date) }));
   const recent = rows.filter(x => x.t >= yearAgo).sort((a, b) => b.t - a.t);
-  const onStreet = street ? recent.filter(x => norm(x.work_name).includes(norm(street))) : [];
+  /* צו "ברחוב": מחשבים פער מספרי בית בין הבית לאתר ("דיזנגוף 254" מול דיזנגוף 100 = 154).
+     נתפס 8.10.2026: צו בדיזנגוף 254 סומן אדום לבית בדיזנגוף 100, כ-1.5 ק"מ משם. */
+  const n = Number(num) || 0, sn = norm(street);
+  const gapOf = w => {
+    const t = String(w || ''), i = norm(t).indexOf(sn);
+    if (!n || i < 0) return null;
+    const m = /(\d{1,4})(?:\s*[-–]\s*(\d{1,4}))?/.exec(t.slice(Math.max(0, t.indexOf(street.split(' ').pop())))); // המספר הראשון אחרי שם הרחוב
+    if (!m) return null;
+    const lo = +m[1], hi = m[2] ? +m[2] : lo;
+    return n < Math.min(lo, hi) ? Math.min(lo, hi) - n : n > Math.max(lo, hi) ? n - Math.max(lo, hi) : 0;
+  };
+  const onStreet = street ? recent.filter(x => norm(x.work_name).includes(sn)).map(x => ({ ...x, gap: gapOf(x.work_name) }))
+    .sort((a, b) => (a.gap ?? 9999) - (b.gap ?? 9999)) : [];
   return { recent, onStreet };
 }
 async function getCrime(code) {
@@ -613,6 +625,8 @@ async function getPlans(lat, lon) {
   }
   return out;
 }
+const WIDE_TYPE = /מתאר ארצית|מתאר מחוזית|כוללנית|תשתית לאומית|סעיף 77|77 ו|76/;
+const WIDE_NAME = /עדכון תכנית המתאר|תכנית כוללת|כלל[- ]עירוני|^תמ"?א|^תמא\/|^תת"?ל/;
 const INFRA = /תשתית|תת"ל|תתל|כביש|מסילה|רכבת|מטרו|רק"ל|רכבת קלה|הקו ה(כחול|סגול|ירוק|אדום)|מחלף|תחנת כוח|קו מתח|הולכת גז|מתקן טיהור|מט"ש|שפכים/;
 function parsePlan(a) {
   const name = a['שם תכנית'];
@@ -626,7 +640,8 @@ function parsePlan(a) {
     dunam: Number(a['שטח תכנית רשום בדונם'] || 0),
     units: Number(a["שינוי מס' יח' דיור "] || a["שינוי מס' יח' דיור"] || 0),
     goal: goal.replace(/\s+/g, ' ').trim(),
-    infra: INFRA.test(name + ' ' + type + ' ' + goal.slice(0, 200)),
+    /* תשתית: לפי שם וסוג בלבד, לא לפי המטרות. נתפס 8.10.2026: "הריסת מבנה 'רכבת'" (סוג בניין) ו"התחדשות במרחב תחנת המטרו" סומנו כתשתית. */
+    infra: (INFRA.test(name) || /תשתית לאומית/.test(type)) && !/התחדשות|פינוי|בינוי|מגורים|מתחם/.test(name),
     updated: a['תאריך עדכון אחרון'], published: a['תאריך פרסום ברשומות'],
     link: a['קישור לאתר מידע תכנוני']
   };
@@ -645,6 +660,7 @@ async function getPlansNear(lat, lon, p) {
   for (const r of (j.results || [])) {
     const pl = parsePlan(r.attributes || {});
     if (!pl || (pl.dunam && pl.dunam > 5000)) continue;
+    if (/מדיניות|כוללנית|מתאר ארצית|מתאר מחוזית/.test(pl.type + ' ' + pl.status) || /עדכון תכנית המתאר|תכנית כוללת/.test(pl.name)) continue; // לא תכניות "בסביבה" — חלות על כל העיר
     const rings = ((r.geometry && r.geometry.rings) || []).filter(x => x.length > 2);
     const cur = by.get(pl.id) || { ...pl, ringsLL: [], ringsXY: [] };
     for (const ring of rings) { cur.ringsLL.push(ring.map(([x, y]) => [y, x])); cur.ringsXY.push(ring.map(([x, y]) => toITM(y, x))); }
@@ -765,8 +781,13 @@ function analyze(R) {
 
   // ---- תכנון ----
   if (has('plans')) {
-    const local = R.plans.filter(p => p.dunam > 0 && p.dunam <= 500);
-    const wide = R.plans.filter(p => !(p.dunam > 0 && p.dunam <= 500));
+    /* מקומית = תכנית שחלה על שטח קטן. נקבע לפי סוג התכנית ולא רק לפי השטח הרשום —
+       נתפס 8.10.2026: "תא/5500 עדכון תכנית המתאר" (כוללנית לכל ת"א) רשומה כ-57 דונם, ו"מדיניות פיתוח בסביבת מתע"ן" (מסמך מדיניות) כ-1 דונם.
+       שתיהן סומנו באדום "חלה ממש כאן". מסמכי מדיניות אינם תכנית בכלל → לא נכנסים. */
+    const plans = R.plans.filter(p => !/מדיניות/.test(p.type + ' ' + p.status));
+    const isWide = p => WIDE_TYPE.test(p.type) || WIDE_NAME.test(p.name) || !(p.dunam > 0 && p.dunam <= 500);
+    const local = plans.filter(p => !isWide(p));
+    const wide = plans.filter(isWide);
     const localPending = local.filter(p => !p.approved);
     const widePending = wide.filter(p => !p.approved);
     for (const p of localPending) add({ cat: 'plan', sev: 'red', ic: 'plan', title: 'תכנית בנייה בתהליך, חלה ממש כאן',
@@ -774,10 +795,14 @@ function analyze(R) {
       link: p.link && { href: p.link, label: 'מסמכי התכנית במינהל התכנון' } });
     for (const p of local.filter(p => p.approved)) add({ cat: 'plan', sev: 'info', ic: 'plan', title: 'תכנית מאושרת שחלה על המקום',
       text: `${p.name}${p.published ? ` · פורסמה ${usDate(p.published)}` : ''}.${p.goal ? ' ' + p.goal.slice(0, 140) : ''}`, link: p.link && { href: p.link, label: 'פרטי התכנית' } });
-    for (const p of widePending) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: p.dunam && p.dunam < 5000 ? 'תכנית לאזור בתהליך' : 'תכנית כלל-עירונית בתהליך',
-      text: `${p.name}. סטטוס: ${p.status || 'לא צוין'}.${p.units ? ` כוללת שינוי של ${fmtN(p.units)} יחידות דיור בעיר.` : ''}`, link: p.link && { href: p.link, label: 'פרטי התכנית' } });
+    /* תכניות כלל-עירוניות/ארציות בתהליך חלות על כל כתובת בעיר → לא מבדילות בין בתים. מוצגות כמידע אחד מקובץ, לא נספרות בציון.
+       (נתפס 8.10.2026: חולון קיבלה 3 דגלים צהובים כאלה, כל אחד -0.7) */
+    const one = p => `${p.name}${p.status ? ` (${p.status})` : ''}`;
+    if (widePending.length) add({ cat: 'plan', sev: 'info', ic: 'plan', title: widePending.length === 1 ? 'תכנית כלל-עירונית בתהליך' : `${widePending.length} תכניות כלל-עירוניות או ארציות בתהליך`,
+      text: `${one(widePending[0])}.${widePending[0].units ? ` כוללת שינוי של ${fmtN(widePending[0].units)} יחידות דיור בעיר.` : ''} תכניות כאלה חלות על כל העיר או על אזור גדול, ולכן לא נספרות בציון.`,
+      more: widePending.slice(1, 6).map(one), moreTitle: 'עוד', link: widePending[0].link && { href: widePending[0].link, label: 'פרטי התכנית' } });
     if (!R.plans.length) add({ cat: 'plan', sev: 'green', ic: 'plan', title: 'אין תכניות מקוונות בנקודה', text: 'במאגר המקוון של מינהל התכנון (תכניות מ-2011 ואילך) לא נמצאה תכנית החלה על הנקודה. תכניות ישנות יותר לא מופיעות כאן.' });
-    else if (!local.length && !widePending.length) add({ cat: 'plan', sev: 'green', ic: 'plan', title: 'רק תכניות כלל-עירוניות מאושרות', text: `${R.plans.length} תכניות מאושרות חלות על כל העיר (למשל ${R.plans[0].name}). לא נמצאה תכנית מקומית בתהליך.` });
+    else if (!localPending.length) add({ cat: 'plan', sev: 'green', ic: 'plan', title: 'אין תכנית מקומית בתהליך על המגרש', text: `${plans.length} תכניות חלות על הנקודה (למשל ${plans[0] ? plans[0].name : R.plans[0].name}), כולן מאושרות או כלל-עירוניות. לא נמצאה תכנית מקומית בתהליך.` });
   }
 
   // ---- תכניות בסביבה (עד 300 מ') ----
@@ -883,7 +908,14 @@ function analyze(R) {
   // ---- בטיחות בנייה ----
   if (has('safety')) {
     const s = R.safety;
-    if (s.onStreet.length) add({ cat: 'build', sev: 'red', ic: 'hardhat', title: `צו בטיחות לאתר בנייה ברחוב ${R.addr.street}`, text: s.onStreet.slice(0, 2).map(x => `${x.work_name} · ${x.executor_name || ''} · ${x.felony_name || ''} (${x.send_date})`).join(' | ') });
+    /* מספר בית: פער עד 10 (אותו קטע רחוב) → אדום. עד 40 → צהוב. רחוק יותר או בלי מספר → מידע. */
+    const near = s.onStreet.filter(x => x.gap !== null && x.gap <= 10), mid = s.onStreet.filter(x => x.gap !== null && x.gap > 10 && x.gap <= 40);
+    const rest = s.onStreet.filter(x => !near.includes(x) && !mid.includes(x));
+    const od = x => `${x.work_name} · ${x.executor_name || ''} · ${x.felony_name || ''} (${x.send_date})`;
+    if (near.length) add({ cat: 'build', sev: 'red', ic: 'hardhat', title: `צו בטיחות לאתר בנייה סמוך: ${near[0].work_name}`, text: near.slice(0, 2).map(od).join(' | ') + '. אתר בנייה פעיל עם ליקויי בטיחות כמה בתים מכאן.' });
+    else if (mid.length) add({ cat: 'build', sev: 'yellow', ic: 'hardhat', title: `צו בטיחות לאתר בנייה באותו רחוב, לא רחוק`, text: mid.slice(0, 2).map(od).join(' | ') + '.' });
+    if (rest.length) add({ cat: 'build', sev: 'info', ic: 'hardhat', title: rest.length === 1 ? `צו בטיחות לאתר בנייה ברחוב ${R.addr.street}, רחוק מהבית` : `${rest.length} צווי בטיחות ברחוב ${R.addr.street}, רחוקים מהבית`,
+      text: R.addr.num ? 'לפי מספרי הבתים, האתרים לא קרובים לכתובת שנבדקה.' : 'לא הוזן מספר בית, אז אי אפשר לדעת כמה הם קרובים.', more: rest.slice(0, 5).map(od), moreTitle: 'הצווים' });
     if (s.recent.length) add({ cat: 'build', sev: 'info', ic: 'hardhat', title: s.recent.length === 1 ? 'צו בטיחות אחד לאתר בנייה ביישוב בשנה האחרונה' : `${s.recent.length} צווי בטיחות לאתרי בנייה ביישוב בשנה האחרונה`, text: 'צווים שהוציא משרד העבודה לאתרים עם ליקויי בטיחות. שימושי לבדיקת קבלן לפני שקונים מקבלן.', more: s.recent.slice(0, 6).map(x => `${x.send_date} · ${x.work_name} · ${x.executor_name || ''}`), moreTitle: 'האחרונים' });
   }
 
@@ -975,7 +1007,7 @@ async function collect(addr, mark = () => {}) {
     renewal: () => getRenewal(addr.code, addr.street, addr.num),
     antennas: () => getAntennas(p), factories: () => getFactories(p),
     crime: () => getCrime(addr.code), schools: () => getSchools(p), bus: () => getBus(p, addr.code),
-    air: () => getAir(p), gas: () => getGas(p), safety: () => getSafety(addr.city, addr.street)
+    air: () => getAir(p), gas: () => getGas(p), safety: () => getSafety(addr.city, addr.street, addr.num)
   };
   await Promise.all(Object.entries(jobs).map(async ([k, fn]) => {
     try { R[k] = await fn(); mark(k, true); }
