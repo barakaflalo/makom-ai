@@ -241,7 +241,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
    מינהל התכנון (iplan Xplan), OpenStreetMap Nominatim (איתור כתובת).
    נתוני nadlan.gov.il לא בשימוש עד אישור בכתב ממפ"י (תנאי השימוש שלהם).
    ===================================================================== */
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 
 /* ---------- יומן שגיאות (לקח StockAI) ---------- */
 const ERRLOG_KEY = 'makom_errlog';
@@ -337,6 +337,7 @@ const RID = {
   antennas: '8935c8e5-ec77-421f-af86-d970583195f8',
   factories: '7ad8ddc7-87f4-45f9-84e4-d7f972662153',
   schools: '5c5d6bb0-755d-470d-84b6-d7dd3135ba9c',
+  schoolInfo: '5548fd63-5868-4053-ad81-98caddc5e232',
   gas: '5537a0ef-3eeb-449c-90c8-51e27564f0cb',
   air: '782cfb94-ebbd-4f41-aba2-80c298457a58',
   bus: 'e873e6a2-66c1-494f-a677-f5e77348edb0',
@@ -408,10 +409,12 @@ async function nom(params) {
   if (!r.ok) throw new Error('איתור הכתובת נכשל (' + r.status + ')');
   return r.json();
 }
-function placeCity(a) { const ad = a.address || {}; return ad.city || ad.town || ad.village || ad.municipality || ad.suburb || ''; }
+/* בדיקת עיר: רק מול שם היישוב עצמו. לא מול הכתובת המלאה —
+   בכתובת של חדרה כתוב "מחוז חיפה", וזה העביר את חדרה כ"חיפה" (באג שנתפס בבדיקה 8.10.2026). */
+function placeCities(a) { const ad = a.address || {}; return [ad.city, ad.town, ad.village, ad.municipality, ad.hamlet].filter(Boolean); }
 function cityMatch(res, city) {
   const c = norm(city);
-  return res.filter(a => { const pc = norm(placeCity(a)); return pc && (pc === c || pc.includes(c) || c.includes(pc) || norm(a.display_name).includes(c)); });
+  return res.filter(a => placeCities(a).some(n => { const pc = norm(n); return pc && pc.length > 1 && (pc === c || pc.startsWith(c) || c.startsWith(pc)); }));
 }
 async function geocode(city, street, num) {
   // 1) כתובת מלאה, מובנית
@@ -460,11 +463,37 @@ async function getFactories(p) {
   }
   return [...by.values()].map(f => ({ ...f, d: dist(p, f.xy) })).filter(f => f.d <= 5000).sort((a, b) => a.d - b.d);
 }
+/* מוסדות חינוך: מיקום מ"קואורדינטות מוסדות החינוך", וסוג/פיקוח ממאגר "מאפייני מוסדות"
+   לפי סמל מוסד (שמות הגנים לרוב לא מתחילים ב"גן" — "נירית", "זית" — לכן לא מסווגים לפי שם).
+   המאגר המסווג מעודכן עד 2015; סוג המוסד כמעט לא משתנה, אבל מציינים זאת. */
+const PIKUACH = s => { const t = String(s || '').replace(/["'״]/g, ''); return /^ממד$/.test(t) ? 'ממלכתי-דתי' : /^ממ$/.test(t) ? 'ממלכתי' : /חרד|עצמא|מעיין/.test(t) ? 'חרדי' : t; };
 async function getSchools(p) {
   const r = await ck(RID.schools, { limit: 32000, fields: ['SEMEL_MOSAD', 'SHEM_MOSAD', 'ITM_X', 'ITM_Y'] }, 30 * DAY);
-  return r.records.map(s => ({ id: s.SEMEL_MOSAD, name: String(s.SHEM_MOSAD || '').trim(), xy: [Number(s.ITM_X), Number(s.ITM_Y)] }))
-    .filter(s => validITM(...s.xy)).map(s => ({ ...s, kg: /^(גן|מעון|פעוטון)[\s\-"'״]/.test(s.name + ' '), d: dist(p, s.xy) }))
-    .filter(s => s.d <= 1500).sort((a, b) => a.d - b.d);
+  const near = r.records.map(s => ({ id: Number(s.SEMEL_MOSAD), name: String(s.SHEM_MOSAD || '').trim(), xy: [Number(s.ITM_X), Number(s.ITM_Y)] }))
+    .filter(s => validITM(...s.xy)).map(s => ({ ...s, d: dist(p, s.xy) })).filter(s => s.d <= 1500).sort((a, b) => a.d - b.d)
+    .filter((s, i, arr) => arr.findIndex(o => o.name === s.name && Math.abs(o.xy[0] - s.xy[0]) < 30 && Math.abs(o.xy[1] - s.xy[1]) < 30) === i) // כפילויות: אותו שם באותה נקודה
+    .slice(0, 150);
+  const info = {};
+  try {
+    const ids = near.map(s => s.id).filter(Boolean);
+    if (ids.length) {
+      const j = await ck(RID.schoolInfo, { limit: 1500, sort: 'שנה desc', fields: ['סמל מוסד', 'שנה', 'סוג מוסד', 'פיקוח', 'מגזר', 'משכבה', 'עד שכבה'], filters: { 'סמל מוסד': ids } }, 30 * DAY);
+      for (const x of j.records) if (!info[x['סמל מוסד']]) info[x['סמל מוסד']] = x;
+    }
+  } catch (e) { logErr('schoolInfo: ' + e.message); }
+  return near.map(s => {
+    const x = info[s.id];
+    let kind = 'other';
+    if (x) {
+      const from = Number(x['משכבה']), to = Number(x['עד שכבה']), type = String(x['סוג מוסד'] || '');
+      if (/גן ילדים/.test(type) || (to === 0 && from === 0)) kind = 'kg';
+      else if (to >= 1 && to <= 6) kind = 'elem';
+      else if (from >= 7 && to <= 9) kind = 'junior';
+      else if (from >= 7 || to >= 10) kind = 'high';
+      else if (to >= 1) kind = 'elem';
+    }
+    return { ...s, kind, kg: kind === 'kg', pik: x ? PIKUACH(x['פיקוח']) : '', sector: x ? x['מגזר'] : '' };
+  });
 }
 async function getGas(p) {
   const r = await ck(RID.gas, { limit: 2000, fields: ['שם_תחנה', 'חברה', 'כתובת', 'X', 'Y'] }, 7 * DAY);
@@ -482,11 +511,16 @@ async function getBus(p, code) {
     const xy = toITM(Number(b.Lat), Number(b.Long)); return { id: b.StationId, type: b.StationTypeName, xy, d: dist(p, xy) };
   }).filter(b => b.d <= 800).sort((a, b) => a.d - b.d);
 }
+/* צווי בטיחות: סינון מדויק לפי שם העיר (filters), לא חיפוש טקסט + limit —
+   בבדיקה, q+limit החזיר רשומות בלי תאריך ופספס את כל השנה האחרונה. רק קטגוריית "בנייה". */
 async function getSafety(city, street) {
-  const r = await ck(RID.safety, { limit: 400, q: city, sort: '_id desc', fields: ['send_date', 'work_name', 'city_name', 'executor_name', 'category_name', 'felony_name'] }, DAY);
-  const c = norm(city), yearAgo = Date.now() - 365 * DAY;
+  const F = ['send_date', 'work_name', 'city_name', 'executor_name', 'category_name', 'felony_name'];
+  let r = await ck(RID.safety, { limit: 5000, fields: F, filters: { city_name: city } }, DAY);
+  const c = norm(city);
+  if (!r.records.length) { r = await ck(RID.safety, { limit: 5000, fields: F, q: city }, DAY); r.records = r.records.filter(x => norm(x.city_name) === c); }
+  const yearAgo = Date.now() - 365 * DAY;
   const parseD = s => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s || ''); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0; };
-  const rows = r.records.filter(x => norm(x.city_name) === c || norm(x.city_name).includes(c)).map(x => ({ ...x, t: parseD(x.send_date) }));
+  const rows = r.records.filter(x => /בני/.test(x.category_name || '')).map(x => ({ ...x, t: parseD(x.send_date) }));
   const recent = rows.filter(x => x.t >= yearAgo).sort((a, b) => b.t - a.t);
   const onStreet = street ? recent.filter(x => norm(x.work_name).includes(norm(street))) : [];
   return { recent, onStreet };
@@ -560,7 +594,7 @@ function analyze(R) {
       link: p.link && { href: p.link, label: 'מסמכי התכנית במינהל התכנון' } });
     for (const p of local.filter(p => p.approved)) add({ cat: 'plan', sev: 'info', ic: 'plan', title: 'תכנית מאושרת שחלה על המקום',
       text: `${p.name}${p.published ? ` · פורסמה ${usDate(p.published)}` : ''}.${p.goal ? ' ' + p.goal.slice(0, 140) : ''}`, link: p.link && { href: p.link, label: 'פרטי התכנית' } });
-    for (const p of widePending) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: 'תכנית כלל-עירונית בתהליך',
+    for (const p of widePending) add({ cat: 'plan', sev: 'yellow', ic: 'plan', title: p.dunam && p.dunam < 5000 ? 'תכנית לאזור בתהליך' : 'תכנית כלל-עירונית בתהליך',
       text: `${p.name}. סטטוס: ${p.status || 'לא צוין'}.${p.units ? ` כוללת שינוי של ${fmtN(p.units)} יחידות דיור בעיר.` : ''}`, link: p.link && { href: p.link, label: 'פרטי התכנית' } });
     if (!R.plans.length) add({ cat: 'plan', sev: 'green', ic: 'plan', title: 'אין תכניות מקוונות בנקודה', text: 'במאגר המקוון של מינהל התכנון (תכניות מ-2011 ואילך) לא נמצאה תכנית החלה על הנקודה. תכניות ישנות יותר לא מופיעות כאן.' });
     else if (!local.length && !widePending.length) add({ cat: 'plan', sev: 'green', ic: 'plan', title: 'רק תכניות כלל-עירוניות מאושרות', text: `${R.plans.length} תכניות מאושרות חלות על כל העיר (למשל ${R.plans[0].name}). לא נמצאה תכנית מקומית בתהליך.` });
@@ -626,11 +660,17 @@ function analyze(R) {
 
   // ---- חינוך ----
   if (has('schools')) {
-    const S = R.schools, kg = S.filter(s => s.kg && s.d <= 500), sch = S.filter(s => !s.kg && s.d <= 1000);
-    const ns = S.find(s => !s.kg), nk = S.find(s => s.kg);
-    add({ cat: 'edu', sev: sch.length || kg.length ? 'green' : 'yellow', ic: 'school',
-      title: `${sch.length} בתי ספר בק"מ, ${kg.length} גנים ומעונות ב-500 מ'`,
-      text: [ns && `בית הספר הקרוב: ${ns.name} (${fmtM(ns.d)})`, nk && `הגן הקרוב: ${nk.name} (${fmtM(nk.d)})`].filter(Boolean).join('. ') + '.', markers: 'schools' });
+    const S = R.schools;
+    const kg = S.filter(s => s.kind === 'kg' && s.d <= 500), el = S.filter(s => s.kind === 'elem' && s.d <= 1000), hi = S.filter(s => (s.kind === 'high' || s.kind === 'junior') && s.d <= 1500);
+    const near = k => S.find(s => s.kind === k);
+    const w = s => s ? `${s.name}${s.pik ? ', ' + s.pik : ''} (${fmtM(s.d)})` : '';
+    const ne = near('elem'), nk = near('kg'), nh = S.find(s => s.kind === 'high' || s.kind === 'junior');
+    const pikSet = [...new Set(el.map(s => s.pik).filter(Boolean))];
+    const other = S.filter(s => s.kind === 'other' && s.d <= 1000).length;
+    add({ cat: 'edu', sev: el.length && kg.length ? 'green' : 'yellow', ic: 'school',
+      title: `${kg.length} גנים ב-500 מ', ${el.length} יסודיים בק"מ, ${hi.length} על-יסודיים${other ? ` ועוד ${other} מוסדות` : ''}`,
+      text: [ne && `היסודי הקרוב: ${w(ne)}`, nk && `הגן הקרוב: ${w(nk)}`, nh && `העל-יסודי הקרוב: ${w(nh)}`].filter(Boolean).join('. ') + '.' +
+        (pikSet.length ? ` סוגי פיקוח ביסודיים הקרובים: ${pikSet.join(', ')}.` : '') + ' (סיווג המוסדות לפי משרד החינוך, עדכון אחרון 2015.)', markers: 'schools' });
   }
 
   // ---- תחבורה ----
@@ -836,7 +876,7 @@ let mapObj = null;
 const LAYERS = [
   ['antennas', 'אנטנות', '#E08A3C', a => `${a.co || ''} · ${a.addr || ''}<br>${a.permit || ''}${isFinite(a.pct) && a.pct > 0 ? ` · ${a.pct}% מהסף` : ''}${a.check ? `<br>בדיקה: ${a.check}` : ''}`, 500],
   ['factories', 'מפעלים', '#F08A6E', f => `${f.name}<br>${f.field || f.branch || ''}`, 3000],
-  ['schools', 'גנים ובתי ספר', '#6FCF97', s => s.name, 1000],
+  ['schools', 'גנים ובתי ספר', '#6FCF97', s => `${s.name}${{ kg: ' · גן', elem: ' · יסודי', junior: ' · חטיבת ביניים', high: ' · על-יסודי' }[s.kind] || ''}${s.pik ? ' · ' + s.pik : ''}`, 1000],
   ['bus', 'תחנות', '#7FB3F0', b => 'תחנה ' + b.id + (b.type ? ' · ' + b.type : ''), 500],
   ['gas', 'דלק', '#C9A227', g => `${g.co || ''} ${g.name || ''}`, 1500],
   ['air', 'ניטור אוויר', '#B48CF0', a => a.name, 99999]
